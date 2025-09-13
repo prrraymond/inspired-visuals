@@ -1,0 +1,34 @@
+player,player_id,team,opponent,completions,attempts,pass_yards,pass_tds,ints,passer_rating,qbr,headshot,position
+Dak Prescott,2577417,DAL,PHI,,,188.0,0.0,0.0,76.6,,https://a.espncdn.com/i/headshots/nfl/players/full/2577417.png,QB
+Jalen Hurts,4040715,PHI,DAL,,,152.0,0.0,0.0,94.2,,https://a.espncdn.com/i/headshots/nfl/players/full/4040715.png,QB
+Patrick Mahomes,3139477,KC,LAC,,,258.0,1.0,0.0,89.5,,https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png,QB
+Justin Herbert,4038941,LAC,KC,,,318.0,3.0,0.0,131.7,,https://a.espncdn.com/i/headshots/nfl/players/full/4038941.png,QB
+Baker Mayfield,3052587,TB,ATL,,,167.0,3.0,0.0,99.3,,https://a.espncdn.com/i/headshots/nfl/players/full/3052587.png,QB
+Michael Penix Jr.,4360423,ATL,TB,,,298.0,1.0,0.0,93.2,,https://a.espncdn.com/i/headshots/nfl/players/full/4360423.png,QB
+Joe Burrow,3915511,CIN,CLE,,,113.0,1.0,0.0,87.8,,https://a.espncdn.com/i/headshots/nfl/players/full/3915511.png,QB
+Joe Flacco,11252,CLE,CIN,,,290.0,1.0,2.0,75.2,,https://a.espncdn.com/i/headshots/nfl/players/full/11252.png,QB
+Tua Tagovailoa,4241479,MIA,IND,,,114.0,1.0,2.0,51.7,,https://a.espncdn.com/i/headshots/nfl/players/full/4241479.png,QB
+Zach Wilson,4361259,MIA,IND,,,32.0,0.0,0.0,70.8,,https://a.espncdn.com/i/headshots/nfl/players/full/4361259.png,QB
+Daniel Jones,3917792,IND,MIA,,,272.0,1.0,0.0,115.9,,https://a.espncdn.com/i/headshots/nfl/players/full/3917792.png,QB
+Geno Smith,15864,LV,NE,,,362.0,1.0,1.0,102.8,,https://a.espncdn.com/i/headshots/nfl/players/full/15864.png,QB
+Drake Maye,4431452,NE,LV,,,287.0,1.0,1.0,80.6,,https://a.espncdn.com/i/headshots/nfl/players/full/4431452.png,QB
+Kyler Murray,3917315,ARI,NO,,,163.0,2.0,0.0,108.8,,https://a.espncdn.com/i/headshots/nfl/players/full/3917315.png,QB
+Spencer Rattler,4426339,NO,ARI,,,214.0,0.0,0.0,70.4,,https://a.espncdn.com/i/headshots/nfl/players/full/4426339.png,QB
+Aaron Rodgers,8439,PIT,NYJ,,,244.0,4.0,0.0,136.7,,https://a.espncdn.com/i/headshots/nfl/players/full/8439.png,QB
+Justin Fields,4362887,NYJ,PIT,,,218.0,1.0,0.0,119.1,,https://a.espncdn.com/i/headshots/nfl/players/full/4362887.png,QB
+Russell Wilson,14881,NYG,WSH,,,168.0,0.0,0.0,59.3,,https://a.espncdn.com/i/headshots/nfl/players/full/14881.png,QB
+Jayden Daniels,4426348,WSH,NYG,,,233.0,1.0,0.0,98.3,,https://a.espncdn.com/i/headshots/nfl/players/full/4426348.png,QB
+Bryce Young,4685720,CAR,JAX,,,154.0,1.0,2.0,49.0,,https://a.espncdn.com/i/headshots/nfl/players/full/4685720.png,QB
+Trevor Lawrence,4360310,JAX,CAR,,,178.0,1.0,1.0,74.4,,https://a.espncdn.com/i/headshots/nfl/players/full/4360310.png,QB
+Cam Ward,4688380,TEN,DEN,,,112.0,0.0,0.0,54.5,,https://a.espncdn.com/i/headshots/nfl/players/full/4688380.png,QB
+Bo Nix,4426338,DEN,TEN,,,176.0,1.0,2.0,60.0,,https://a.espncdn.com/i/headshots/nfl/players/full/4426338.png,QB
+Brock Purdy,4361741,SF,SEA,,,277.0,2.0,2.0,92.2,,https://a.espncdn.com/i/headshots/nfl/players/full/4361741.png,QB
+Sam Darnold,3912547,SEA,SF,,,150.0,0.0,0.0,87.2,,https://a.espncdn.com/i/headshots/nfl/players/full/3912547.png,QB
+Jared Goff,3046779,DET,GB,,,225.0,1.0,1.0,88.6,,https://a.espncdn.com/i/headshots/nfl/players/full/3046779.png,QB
+Jordan Love,4036378,GB,DET,,,188.0,2.0,0.0,128.6,,https://a.espncdn.com/i/headshots/nfl/players/full/4036378.png,QB
+C.J. Stroud,4432577,HOU,LAR,,,188.0,0.0,1.0,74.3,,https://a.espncdn.com/i/headshots/nfl/players/full/4432577.png,QB
+Matthew Stafford,12483,LAR,HOU,,,245.0,1.0,0.0,109.1,,https://a.espncdn.com/i/headshots/nfl/players/full/12483.png,QB
+Lamar Jackson,3916387,BAL,BUF,,,209.0,2.0,0.0,144.4,,https://a.espncdn.com/i/headshots/nfl/players/full/3916387.png,QB
+Josh Allen,3918298,BUF,BAL,,,394.0,2.0,0.0,112.0,,https://a.espncdn.com/i/headshots/nfl/players/full/3918298.png,QB
+J.J. McCarthy,4433970,MIN,CHI,,,143.0,2.0,1.0,98.5,,https://a.espncdn.com/i/headshots/nfl/players/full/4433970.png,QB
+Caleb Williams,4431611,CHI,MIN,,,210.0,1.0,0.0,86.6,,https://a.espncdn.com/i/headshots/nfl/players/full/4431611.png,QB
