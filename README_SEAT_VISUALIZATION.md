@@ -32,6 +32,16 @@ pip install plotly numpy kaleido
 
 ## Usage
 
+### Option 1: Standalone HTML (No Installation Required)
+
+Simply open `seat_visualization_standalone.html` in any modern web browser. This file:
+- Works completely offline after the initial load
+- Requires no Python or package installation
+- Uses Plotly.js from CDN
+- Generates random dummy data each time you refresh
+
+### Option 2: Python Script
+
 Run the visualization script:
 
 ```bash
@@ -42,6 +52,8 @@ This will:
 1. Generate the interactive visualization
 2. Display it in your default browser
 3. Save an HTML file named `seat_visualization.html`
+
+**Note:** Requires installing dependencies first (see Installation section)
 
 ## Customization
 
