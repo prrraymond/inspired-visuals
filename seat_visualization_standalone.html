@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Congressional Seat Visualization</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+        }
+        #visualization {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div id="visualization">
+        <h1>Congressional Seat Distribution Analysis</h1>
+        <div id="plotly-chart"></div>
+    </div>
+
+    <script>
+        // Configuration
+        const SEAT_WIDTH = 0.8;
+        const SEAT_HEIGHT = 1.2;
+        const SPACING_X = 1.0;
+        const SPACING_Y = 1.5;
+        const SEATS_PER_ROW = 5;
+
+        // Generate seat grid
+        function createSeatGrid(numSeats, startX, partyDistribution, highlightIndices = []) {
+            const shapes = [];
+
+            for (let i = 0; i < numSeats; i++) {
+                const row = Math.floor(i / SEATS_PER_ROW);
+                const col = i % SEATS_PER_ROW;
+
+                const x0 = startX + col * SPACING_X;
+                const y0 = -row * SPACING_Y;
+                const x1 = x0 + SEAT_WIDTH;
+                const y1 = y0 + SEAT_HEIGHT;
+
+                // Determine color
+                const color = partyDistribution[i] === 'D' ? '#5DADE2' : '#F1948A';
+
+                // Create seat rectangle
+                shapes.push({
+                    type: 'rect',
+                    x0: x0, y0: y0, x1: x1, y1: y1,
+                    fillcolor: color,
+                    line: { color: 'white', width: 2 }
+                });
+
+                // Add highlight border if needed
+                if (highlightIndices.includes(i)) {
+                    shapes.push({
+                        type: 'rect',
+                        x0: x0 - 0.15, y0: y0 - 0.15, x1: x1 + 0.15, y1: y1 + 0.15,
+                        fillcolor: 'rgba(0,0,0,0)',
+                        line: { color: '#666666', width: 3 }
+                    });
+                }
+            }
+
+            return shapes;
+        }
+
+        // Create highlight box with label
+        function createHighlightBox(seatIndices, startX, labelText, labelYOffset = -2) {
+            const shapes = [];
+            const annotations = [];
+
+            if (seatIndices.length === 0) {
+                return { shapes, annotations };
+            }
+
+            // Calculate bounding box
+            const rows = seatIndices.map(idx => Math.floor(idx / SEATS_PER_ROW));
+            const cols = seatIndices.map(idx => idx % SEATS_PER_ROW);
+
+            const minRow = Math.min(...rows);
+            const maxRow = Math.max(...rows);
+            const minCol = Math.min(...cols);
+            const maxCol = Math.max(...cols);
+
+            const x0 = startX + minCol * SPACING_X - 0.2;
+            const y0 = -maxRow * SPACING_Y - 0.2;
+            const x1 = startX + maxCol * SPACING_X + SEAT_WIDTH + 0.2;
+            const y1 = -minRow * SPACING_Y + SEAT_HEIGHT + 0.2;
+
+            // Create bounding box
+            shapes.push({
+                type: 'rect',
+                x0: x0, y0: y0, x1: x1, y1: y1,
+                fillcolor: 'rgba(0,0,0,0)',
+                line: { color: '#888888', width: 2.5 }
+            });
+
+            // Add label
+            annotations.push({
+                x: (x0 + x1) / 2,
+                y: y0 + labelYOffset,
+                text: labelText,
+                showarrow: true,
+                arrowhead: 0,
+                arrowcolor: '#888888',
+                arrowwidth: 2,
+                ax: 0,
+                ay: -30,
+                font: { size: 13, color: '#666666' },
+                bgcolor: 'rgba(255,255,255,0.9)',
+                borderpad: 4
+            });
+
+            return { shapes, annotations };
+        }
+
+        // Shuffle array (Fisher-Yates)
+        function shuffle(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // Generate data for three categories
+        const cat1Seats = 36;
+        const cat1Distribution = shuffle([...Array(18).fill('D'), ...Array(18).fill('R')]);
+        const cat1Highlight = [5, 6, 7, 10, 11, 12, 13, 15, 16, 17, 20, 21, 22, 25, 26, 27, 30, 31];
+
+        const cat2Seats = 26;
+        const cat2Distribution = shuffle([...Array(13).fill('D'), ...Array(13).fill('R')]);
+        const cat2Highlight = [3, 4, 5, 6, 8, 9, 10, 12, 13, 18, 19];
+
+        const cat3Seats = 49;
+        const cat3Distribution = shuffle([...Array(24).fill('D'), ...Array(25).fill('R')]);
+        const cat3Highlight = [44, 45, 46];
+
+        // Starting positions
+        const xPositions = [0, 15, 30];
+        let allShapes = [];
+        let allAnnotations = [];
+
+        // Category 1
+        allShapes.push(...createSeatGrid(cat1Seats, xPositions[0], cat1Distribution, cat1Highlight));
+        const highlight1 = createHighlightBox(cat1Highlight, xPositions[0], '18 are tossups', -3);
+        allShapes.push(...highlight1.shapes);
+        allAnnotations.push(...highlight1.annotations);
+        allAnnotations.push({
+            x: xPositions[0] + 2,
+            y: 3,
+            text: '<b>36</b><br>seats are most<br>competitive',
+            showarrow: false,
+            font: { size: 16, color: '#333333' },
+            align: 'center'
+        });
+
+        // Category 2
+        allShapes.push(...createSeatGrid(cat2Seats, xPositions[1], cat2Distribution, cat2Highlight));
+        const highlight2 = createHighlightBox(cat2Highlight, xPositions[1], '11 or so are<br>in discussion', -2.5);
+        allShapes.push(...highlight2.shapes);
+        allAnnotations.push(...highlight2.annotations);
+        allAnnotations.push({
+            x: xPositions[1] + 2,
+            y: 3,
+            text: '<b>26</b><br>redistricted or<br>under discussion',
+            showarrow: false,
+            font: { size: 16, color: '#333333' },
+            align: 'center'
+        });
+
+        // Category 3
+        allShapes.push(...createSeatGrid(cat3Seats, xPositions[2], cat3Distribution, cat3Highlight));
+        const highlight3 = createHighlightBox(cat3Highlight, xPositions[2], '3 are most competitive', -1.5);
+        allShapes.push(...highlight3.shapes);
+        allAnnotations.push(...highlight3.annotations);
+        allAnnotations.push({
+            x: xPositions[2] + 2,
+            y: 3,
+            text: '<b>49</b><br>without<br>incumbents',
+            showarrow: false,
+            font: { size: 16, color: '#333333' },
+            align: 'center'
+        });
+
+        // Create plotly layout
+        const layout = {
+            shapes: allShapes,
+            annotations: allAnnotations,
+            width: 1200,
+            height: 700,
+            plot_bgcolor: '#F5F5F5',
+            xaxis: {
+                showgrid: false,
+                showticklabels: false,
+                zeroline: false,
+                range: [-2, 36]
+            },
+            yaxis: {
+                showgrid: false,
+                showticklabels: false,
+                zeroline: false,
+                range: [-18, 5]
+            },
+            margin: { l: 20, r: 20, t: 20, b: 20 }
+        };
+
+        // Create dummy trace (required for plotly)
+        const data = [{
+            x: [null],
+            y: [null],
+            mode: 'markers',
+            showlegend: false
+        }];
+
+        // Render the plot
+        Plotly.newPlot('plotly-chart', data, layout, {
+            responsive: true,
+            displayModeBar: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+        });
+    </script>
+</body>
+</html>
