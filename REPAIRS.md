@@ -84,6 +84,15 @@ developer view, where it is useful.
 **Checked:** `object` appears zero times on the entry page and once with
 `?dev=1`; asserted in `tests/acceptance_flow.py`.
 
+### 6. `git push` worked but `gh` refused the repository
+
+**Was:** the `origin` URL was `https:///github.com/prrraymond/inspired-visuals.git`
+— three slashes, so the host was empty. Git tolerated it by following a
+redirect; `gh` could not parse it and reported "none of the git remotes
+configured for this repository point to a known GitHub host".
+
+**Now:** `origin` is `https://github.com/prrraymond/inspired-visuals.git`.
+
 ### Not fixed, and why
 
 - **The fixed `CHT-85FB02` template is not in Supabase storage.**
