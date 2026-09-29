@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}ChartGen{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('index') }}">ChartGen<span>charts</span></a>
+  {% block topbar %}{% endblock %}
+  <a class="devtoggle {{ 'on' if dev }}" href="{{ dev_href }}"
+     title="Show the pipeline's own view: ids, status, contracts, provenance">
+     Developer view {{ 'on' if dev else 'off' }}</a>
+</header>
+
+{% if config_problems %}
+<div class="banner bad">
+  <strong>Configuration incomplete.</strong>
+  {{ config_problems | join('; ') }} — names only; no values are read or shown here.
+</div>
+{% endif %}
+
+<main{% block main_attrs %}{% endblock %}>{% block content %}{% endblock %}</main>
+
+{% block foot %}{% endblock %}
+</body>
+</html>

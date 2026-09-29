@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Check — ChartGen{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('use', chartid=run.chartid) }}">← Supply different data</a>
+
+<section class="intro">
+  <h1>{{ run.title }}</h1>
+  <p class="lede">{{ contract.row_count }} rows × {{ contract.column_count }} columns read.</p>
+</section>
+
+{% if error %}<div class="banner bad"><strong>{{ error }}</strong></div>{% endif %}
+
+<div class="cols">
+<div class="col-main">
+
+  <section class="panel">
+    <h2>Against the contract</h2>
+    {% set errs = findings | selectattr('level','equalto','error') | list %}
+    {% set warns = findings | selectattr('level','equalto','warning') | list %}
+    {% if not findings %}
+      <p class="ok-line">Every column the template expects is present and usable.</p>
+    {% else %}
+      <ul class="findings">
+      {% for f in findings %}
+        <li class="f-{{ f.level }}">
+          <span class="f-tag">{{ f.level }}</span>
+          <span class="f-msg">{{ f.message }}</span>
+        </li>
+      {% endfor %}
+      </ul>
+      {% if warns | selectattr('fix') | list %}
+      <form method="post" style="margin-top:12px">
+        <input type="hidden" name="apply_repairs" value="1">
+        <button class="btn-quiet" type="submit">Rename
+          {{ warns | selectattr('fix') | list | length }} column(s) to match</button>
+      </form>
+      {% endif %}
+    {% endif %}
+    {% if errs %}
+      <p class="refuse-note">The chart will not be drawn while any of the above stands.
+        That is the point of the check — a chart built on the wrong column renders fine
+        and is wrong.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>Map your columns onto the template</h2>
+    <p class="hint">The template reads through named slots. Fill each one with the column it
+      should use. Anything left blank that the template requires will refuse to render.</p>
+
+    <form method="post">
+      {% for p in iface.placeholders %}
+      <div class="maprow">
+        <div class="mapslot">
+          <span class="mono mapname">{{ p.role }}</span>
+          <span class="maptag {{ 'req' if not p.optional else 'opt' }}">{{ 'required' if not p.optional else 'optional' }}</span>
+          {% if p.comment %}<p class="maphint">{{ p.comment }}</p>{% endif %}
+        </div>
+        <div class="mappick">
+          <select name="{{ p.var }}">
+            <option value="">— not mapped —</option>
+            {% for c in df.columns %}
+              <option value="{{ c }}" {{ 'selected' if mapping.get(p.var) == c }}>{{ c }}</option>
+            {% endfor %}
+            {% if numeric %}
+              <option value="__derive__"
+                {{ 'selected' if p.role in (mapping.get('_derive') or {}) }}>
+                derive it from the bins of…</option>
+            {% endif %}
+          </select>
+          {% if numeric %}
+          <select name="{{ p.var }}__source" class="subpick">
+            {% for c in numeric %}
+              <option value="{{ c }}"
+                {{ 'selected' if (mapping.get('_derive') or {}).get(p.role) == c }}>{{ c }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      <div style="margin-top:16px">
+        <button class="cta" type="submit" {{ 'disabled' if errs }}>Review the parameters</button>
+        {% if errs %}<span class="hint" style="margin-left:10px">Fix the errors above first.</span>{% endif %}
+      </div>
+    </form>
+  </section>
+</div>
+
+<aside class="col-side">
+  <section class="panel side">
+    <h3>Your data</h3>
+    {% for c in contract.columns %}
+    <div class="colcard" style="margin-bottom:7px">
+      <div class="colcard-h">
+        <span class="cname">{{ c.name }}</span>
+        <span class="ckind">{{ c.kind }}</span>
+        <span class="cstate {{ c.severity }}">{{ c.completeness }}</span>
+      </div>
+      <p class="csum" style="margin:0">{{ c.summary }}</p>
+    </div>
+    {% endfor %}
+  </section>
+</aside>
+</div>
+{% endblock %}

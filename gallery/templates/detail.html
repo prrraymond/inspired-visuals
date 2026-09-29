@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% from "_asset.html" import asset_figure, asset_state_row %}
+{% block title %}{{ entry.title if entry else 'Error' }} — ChartGen{% endblock %}
+{% block content %}
+
+{% if error %}
+  <div class="banner bad"><strong>Could not load this entry.</strong> {{ error }}</div>
+{% else %}
+
+<a class="back" href="{{ url_for('index') }}">← Library</a>
+
+<div style="margin-bottom:14px">
+  <a class="cta" style="text-decoration:none; display:inline-block"
+     href="{{ url_for('use', chartid=entry.chartid) }}">Use this template with your data →</a>
+</div>
+
+<header class="entry-head">
+  <div>
+    <h1>{{ entry.title }}</h1>
+    {% if entry.subject %}<p class="subject">{{ entry.subject }}</p>
+    {% else %}<p class="subject none-sub">No subject recorded — nothing states what this entry renders.</p>{% endif %}
+    <p class="cid">{{ entry.chartid }}
+      {% if entry.slug %}· <code>{{ entry.slug }}</code>{% endif %}
+      {% if entry.status %}· {{ entry.status }}{% endif %}
+    </p>
+    <div class="tags">
+      {% for v in entry.viz_types %}<span class="tag">{{ v }}</span>{% endfor %}
+      {% for k, v in entry.flags.items() %}{% if v %}<span class="tag alt">{{ k | lower }}</span>{% endif %}{% endfor %}
+    </div>
+  </div>
+</header>
+
+{# ---- The identity problem, stated rather than hidden ---- #}
+{% if entry.sql_repointed %}
+<div class="banner warn">
+  <strong>This entry describes two different subjects.</strong>
+  Provenance: <strong>{{ entry.provenance_state }}</strong>{% if entry.provenance_recorded %}
+  (recorded on the row){% else %} (derived — no <code>Provenance</code> value recorded){% endif %}.
+  The title, note and styling below come from the <em>source chart</em> it was reverse-engineered
+  from. The contract and parameters come from the data its <code>Final SQL</code> now returns —
+  a different table. Both are shown, labelled, and not blended.
+  {% if entry.provenance_disagreement %}<br><strong>Disagreement:</strong> {{ entry.provenance_disagreement }}{% endif %}
+</div>
+{% endif %}
+
+<div class="cols">
+<div class="col-main">
+
+  {{ asset_figure(entry.render, fallback=entry.source_image,
+                  fallback_note='This entry has not been rendered. Showing the source chart it was derived from.',
+                  tall=True) }}
+
+  {# ---- CAVEATS ---- #}
+  <section class="panel">
+    <h2>Caveats <span class="count">{{ entry.caveats | length }}</span></h2>
+    <p class="hint">Structural features of the chart — how it is built, and what the data must supply.</p>
+    {% if entry.caveats %}
+      <ul class="caveats">{% for c in entry.caveats %}<li>{{ c }}</li>{% endfor %}</ul>
+    {% else %}<p class="none">None recorded.</p>{% endif %}
+  </section>
+
+  {# ---- CONTRACT ---- #}
+  <section class="panel">
+    <h2>Data contract</h2>
+    {% if entry.contract_error %}
+      <div class="banner bad">Stored contract could not be read: {{ entry.contract_error }}</div>
+    {% elif not contract %}
+      <p class="none">No contract recorded. It is derived at hydration from the data
+         <code>Final SQL</code> returns, so an entry that has not been hydrated has none.</p>
+    {% else %}
+      <p class="hint">
+        Derived from the {{ contract.row_count }} rows this entry's SQL actually returns —
+        not authored by a model, and not inferred from the image.
+      </p>
+      <p class="shape">{{ contract.row_count }} rows × {{ contract.column_count }} columns</p>
+
+      {% for c in contract.columns %}
+      <div class="colcard">
+        <div class="colcard-h">
+          <span class="cname">{{ c.name }}</span>
+          <span class="ckind">{{ c.kind }}</span>
+          <span class="cdtype">{{ c.dtype }}</span>
+          {% if dev and c.raw_dtype != c.dtype %}
+            <span class="cdtype muted" title="pandas storage type">{{ c.raw_dtype }}</span>
+          {% endif %}
+          <span class="cstate {{ c.severity }}">{{ c.completeness }}</span>
+        </div>
+        <p class="csum">{{ c.summary }}</p>
+        {% if c.spread %}
+          <div class="spread" title="min / q1 / median / q3 / max">
+            <div class="bar">
+              <div class="iqr" style="left:{{ c.spread.q1_pct }}%;width:{{ c.spread.q3_pct - c.spread.q1_pct }}%"></div>
+              <div class="med" style="left:{{ c.spread.median_pct }}%"></div>
+            </div>
+            <div class="ticks">
+              <span>{{ c.spread.min }}</span><span>{{ c.spread.q1 }}</span>
+              <span class="m">{{ c.spread.median }}</span>
+              <span>{{ c.spread.q3 }}</span><span>{{ c.spread.max }}</span>
+            </div>
+            <p class="meanline">mean {{ c.spread.mean }} · sd {{ c.spread.std }}</p>
+          </div>
+        {% elif c.sample %}
+          <p class="vals">{% for v in c.sample %}<code>{{ v }}</code>{% endfor %}
+            {% if c.sample_truncated %}<span class="more">…</span>{% endif %}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% endif %}
+  </section>
+
+  {# ---- PARAMETERS ---- #}
+  {% if contract and contract.proposals %}
+  <section class="panel">
+    <h2>Parameters <span class="count">{{ contract.proposals | length }}</span></h2>
+    <p class="hint">Derived from the contract's own distribution. <em>Chosen</em> and
+       <em>reviewed</em> are separate facts: a value automation picked is in use, but nobody
+       has endorsed it until a person confirms.</p>
+
+    {% for p in contract.proposals %}
+    <div class="proposal {{ 'is-unreviewed' if p.selected and not p.reviewed }}">
+      <div class="prop-h">
+        <span class="pcol">{{ p.column }}</span>
+        <span class="rstate {{ p.review or p.status }}">{{ p.review_label }}</span>
+        {% if not p.reliable %}<span class="pill bad">unreliable</span>{% endif %}
+      </div>
+
+      <div class="pvals">
+        <div><span class="k">edges</span><span class="v">{{ p.edges | join(' · ') if p.edges else '—' }}</span></div>
+        <div><span class="k">baseline</span><span class="v">{{ p.baseline }}</span></div>
+        <div><span class="k">method</span><span class="v">{{ p.method }}</span></div>
+      </div>
+
+      {% if p.bins %}
+      <table class="bins">
+        <thead><tr><th>Bin</th><th>Range</th><th>Rows</th></tr></thead>
+        <tbody>
+        {% for b in p.bins %}
+          <tr class="{{ 'zero' if b.count == 0 }}">
+            <td>{{ b.label }}</td><td>{{ b.range }}</td>
+            <td>{{ b.count if b.count is not none else '—' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      {% if p.warnings %}
+        <ul class="warnlist">{% for w in p.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+      {% endif %}
+
+      <details class="why" open>
+        <summary>Why these values</summary>
+        <ol class="reasoning">{% for r in p.reasoning %}<li>{{ r }}</li>{% endfor %}</ol>
+        {% if p.caveat %}<p class="pcaveat">{{ p.caveat }}</p>{% endif %}
+      </details>
+
+      <p class="prov">
+        Chosen by <strong>{{ p.selected_by }}</strong>
+        <span class="atype {{ p.selected_by_type }}">{{ p.selected_by_type }}</span>
+        {% if p.selected_at %}· {{ p.selected_at }}{% endif %}
+        {% if p.selection_reason %}<br><span class="reason">Reason: {{ p.selection_reason }}</span>{% endif %}
+        {% if p.over_warnings %}<br><span class="reason">Selected over {{ p.over_warnings | length }} warning(s).</span>{% endif %}
+        <br>
+        {% if p.review == 'authored' %}
+          <span class="rev yes">A person made this choice directly.</span>
+        {% elif p.review == 'confirmed' %}
+          <span class="rev yes">Confirmed by <strong>{{ p.confirmed_by }}</strong>{% if p.confirmed_at %} · {{ p.confirmed_at }}{% endif %}.</span>
+          {% if p.confirmation_reason %}<br><span class="reason">{{ p.confirmation_reason }}</span>{% endif %}
+        {% else %}
+          <span class="rev no">Not reviewed — no person has confirmed this value.</span>
+        {% endif %}
+      </p>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {# ---- TEMPLATE CODE ---- #}
+  <section class="panel">
+    <h2>Template</h2>
+    <p class="hint">Abstract <code>build_figure(df)</code> — no hard-coded data.</p>
+    {% if code %}
+      <pre class="code"><code>{{ code }}</code></pre>
+    {% elif entry.template_url %}
+      <div class="banner bad">The template URL is recorded but could not be fetched.</div>
+    {% else %}
+      <p class="none">No template recorded for this entry.</p>
+    {% endif %}
+  </section>
+
+</div>
+
+{# ---------------- SIDEBAR ---------------- #}
+<aside class="col-side">
+
+  <section class="panel side">
+    <h3>Provenance</h3>
+    <p class="hint">The source chart this template was reverse-engineered from.</p>
+    {% if entry.asset_note %}<p class="note">{{ entry.asset_note }}</p>{% endif %}
+    {% if entry.original_sql %}
+      <p class="k">Original SQL <span class="spec">spec — table may not exist yet</span></p>
+      <pre class="sql spec-sql"><code>{{ entry.original_sql }}</code></pre>
+    {% endif %}
+    {% if entry.render.state == 'ok' and entry.source_image.state == 'ok' %}
+      {{ asset_figure(entry.source_image) }}
+    {% endif %}
+
+    {% if entry.source_styling %}
+    <details class="styling" {{ 'open' if entry.styling_has_stale }}>
+      <summary>Styling extracted from the source chart ({{ entry.source_styling | length }})</summary>
+      <p class="hint tight">
+        Read from the source image by Stage B and fed to Stage D's prompt. It describes the
+        <em>original</em> chart{% if entry.sql_repointed %}, not the data this entry now renders{% endif %}.
+      </p>
+      <dl class="styles">
+      {% for f in entry.source_styling %}
+        <dt>{{ f.label }}{% if f.stale %}<span class="pill bad">stale</span>{% endif %}</dt>
+        <dd>
+          {% if f.pretty %}<pre class="mini"><code>{{ f.pretty }}</code></pre>
+          {% else %}{{ f.value }}{% endif %}
+          {% if f.stale %}<p class="stalenote">{{ f.stale }}</p>{% endif %}
+        </dd>
+      {% endfor %}
+      </dl>
+    </details>
+    {% endif %}
+  </section>
+
+  <section class="panel side">
+    <h3>Data this entry renders</h3>
+    {% if entry.final_sql %}
+      <pre class="sql"><code>{{ entry.final_sql }}</code></pre>
+    {% else %}
+      <p class="none">No <code>Final SQL</code>. The original spec has not been repointed
+         at a real table.</p>
+    {% endif %}
+  </section>
+
+  {% if entry.qa_notes %}
+  <section class="panel side">
+    <h3>How to adapt it</h3>
+    <p class="note">{{ entry.qa_notes }}</p>
+  </section>
+  {% endif %}
+
+  <section class="panel side">
+    <h3>Assets</h3>
+    <ul class="states">
+      {{ asset_state_row(entry.render) }}
+      {{ asset_state_row(entry.source_image) }}
+      {{ asset_state_row(entry.thumbnail) }}
+      <li class="state {{ 'ok' if code else ('broken' if entry.template_url else 'absent') }}">
+        <span class="k">Template</span>
+        <span class="v">{% if code %}{{ '{:,}'.format(code|length) }} bytes
+          {% elif entry.template_url %}fetch failed{% else %}not recorded{% endif %}</span>
+      </li>
+    </ul>
+    {% if entry.last_edited %}<p class="edited">Row last edited {{ entry.last_edited[:10] }}</p>{% endif %}
+  </section>
+
+</aside>
+</div>
+{% endif %}
+{% endblock %}

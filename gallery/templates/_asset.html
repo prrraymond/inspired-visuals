@@ -1,0 +1,50 @@
+{# An asset panel that states which of absent / unreachable / broken / ok it is.
+   R9: a broken <img> that looks like a styling bug is a silent failure. #}
+{% macro asset_figure(asset, fallback=None, fallback_note=None, tall=False) %}
+  {% if asset.state == 'ok' %}
+    <figure class="shot {{ 'tall' if tall }}">
+      <img src="{{ asset.url }}" alt="{{ asset.label }}" loading="lazy">
+      <figcaption>{{ asset.label }}</figcaption>
+    </figure>
+  {% elif fallback and fallback.state == 'ok' %}
+    <figure class="shot {{ 'tall' if tall }} is-fallback">
+      <img src="{{ fallback.url }}" alt="{{ fallback.label }}" loading="lazy">
+      <figcaption>
+        <span class="pill warn">no render yet</span>
+        {{ fallback_note or 'Showing the source image this template was derived from.' }}
+      </figcaption>
+    </figure>
+  {% else %}
+    <div class="shot empty {{ 'tall' if tall }}">
+      <p class="empty-h">
+        {% if asset.state == 'absent' %}No {{ asset.label | lower }} yet
+        {% elif asset.state == 'unreachable' %}{{ asset.label }} unreachable
+        {% else %}{{ asset.label }} is broken{% endif %}
+      </p>
+      <p class="empty-d">
+        {% if asset.state == 'absent' %}
+          Nothing is recorded for this entry.
+        {% elif asset.state == 'unreachable' %}
+          Network error: {{ asset.error }}.
+        {% else %}
+          The stored URL returned HTTP {{ asset.status }}.
+        {% endif %}
+        {% if fallback and fallback.state != 'ok' and fallback.url %}
+          The fallback is also unavailable.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro asset_state_row(asset) %}
+  <li class="state {{ asset.state }}">
+    <span class="k">{{ asset.label }}</span>
+    <span class="v">
+      {% if asset.state == 'ok' %}available{% if asset.content_type %} · {{ asset.content_type }}{% endif %}
+      {% elif asset.state == 'absent' %}not recorded
+      {% elif asset.state == 'unreachable' %}unreachable ({{ asset.error }})
+      {% else %}HTTP {{ asset.status }}{% endif %}
+    </span>
+  </li>
+{% endmacro %}

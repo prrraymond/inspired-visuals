@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="intro">
+  <h1>Choose a chart</h1>
+  <p class="lede">
+    Pick the shape that fits what you want to show. Each one opens with sample data
+    you can replace with your own.
+  </p>
+</section>
+
+{% if error %}
+  <div class="banner bad"><strong>Could not load the library.</strong> {{ error }}</div>
+{% elif not cards %}
+  <div class="banner"><strong>Nothing to show yet.</strong>
+    No template in the library has been described for use.</div>
+{% endif %}
+
+<div class="grid">
+{% for c in cards %}
+  <article class="card">
+    <a class="card-link" href="{{ url_for('workspace', chartid=c.chartid) }}">
+      {% if c.preview.ok %}
+        <figure class="shot">
+          <img src="{{ url_for('preview_image', chartid=c.chartid) }}"
+               alt="{{ c.spec.name }} drawn with sample data" loading="lazy">
+        </figure>
+      {% else %}
+        <div class="shot empty">
+          <p class="empty-h">Preview unavailable</p>
+          <p class="empty-d">{{ c.preview.problem or 'This template did not draw.' }}</p>
+        </div>
+      {% endif %}
+
+      <div class="card-body">
+        <h2>{{ c.spec.name }}</h2>
+        <p class="form">{{ c.spec.form }}</p>
+        <p class="job">{{ c.spec.job }}</p>
+        <div class="tags">
+          {% for t in c.spec.traits %}<span class="tag">{{ t }}</span>{% endfor %}
+        </div>
+        <p class="cta">Use this template <span aria-hidden="true">&rarr;</span></p>
+      </div>
+    </a>
+
+    {% if dev %}
+    <div class="devbox">
+      <ul class="facts">
+        <li><span>Chart id</span><span>{{ c.chartid }}</span></li>
+        <li><span>Notion title</span><span>{{ c.entry.title }}</span></li>
+        <li><span>Status</span><span>{{ c.entry.status or '—' }}</span></li>
+        <li><span>Caveats</span><span>{{ c.entry.caveats | length }}</span></li>
+        <li><span>Demo rows</span><span>{{ c.preview.rows or '—' }}</span></li>
+      </ul>
+      <a class="devlink" href="{{ url_for('detail', chartid=c.chartid) }}">Inspect entry &rarr;</a>
+    </div>
+    {% endif %}
+  </article>
+{% endfor %}
+
+{% for e in undescribed %}
+  <article class="card card-flat">
+    <div class="shot empty">
+      <p class="empty-h">Not described yet</p>
+      <p class="empty-d">No demo data or description, so it cannot be previewed or opened.</p>
+    </div>
+    <div class="card-body">
+      <h2>{{ e.title }}</h2>
+      <p class="form">{{ e.viz_types | join(', ') or 'Unknown form' }}</p>
+    </div>
+  </article>
+{% endfor %}
+</div>
+{% endblock %}
