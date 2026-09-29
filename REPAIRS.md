@@ -123,6 +123,42 @@ asserts the raw dtype is *still* shown in developer view.
 
 ---
 
+## 2026-09-29 (later) — Supabase project not serving
+
+**Reported:** images missing in Notion; public storage URLs broken.
+
+**Not a pipeline problem, and not fixable by re-running it.** Verified:
+
+| Check | Result |
+|---|---|
+| `sdpvhujlgakikcizaklw.supabase.co` | **no DNS record** |
+| Pooler, with the project's own credentials | `FATAL (ENOTFOUND) tenant/user postgres.sdpvhujlgakikcizaklw not found` |
+| `SUPABASE_URL` / both JWTs / `SUPABASE_DB_URL` | all four name the same project — no drift |
+| The one other ref in the config (`SUPABASE_DB_URL_DIRECT`) | a different project; resolves, but has no `viz-training-assets` bucket (HTTP 400 on three known object paths) |
+| Catalog exposure | **801 asset URLs across all 400 rows** point at the unreachable project; every one |
+| Recoverable from Notion instead | `Source code` 3/400 · `Final SQL` 4/400 · `Data contract` 3/400 |
+| Local copies of the source images | 11 image files in the whole repo, against ~220 objects in the bucket |
+
+**Why re-running the pipeline cannot help.** Stage A reads the source images
+*from* `viz-training-assets/raw/`. The bucket is the pipeline's **input**, not
+only its output. With the project unreachable there is nothing to read, and no
+local corpus to re-upload from.
+
+**A paused project and a removed one are indistinguishable from outside** —
+both lose the DNS record and both drop out of the pooler's tenant routing. This
+project was paused once before and the state was wrongly read as deletion, so
+no conclusion is drawn here. The state has to be read from the Supabase
+dashboard. If it is paused, resuming restores the objects and all 801 URLs at
+once, with no pipeline run and no API spend.
+
+**Added:** `Scripts/check_assets.py` — checks that the configuration names one
+project (the drift that has bitten twice is now a checkable fact, since a
+Supabase JWT carries the ref it was issued for), that the project answers, and
+that each catalog asset URL resolves. Exits non-zero, so it can gate a pipeline
+run. It reports today's outage correctly.
+
+---
+
 ## 2026-09-24 — course correction: library and workspace
 
 Reframed the prototype around choosing and making a chart rather than around
