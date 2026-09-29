@@ -13,6 +13,7 @@ flow breaks, which is the only kind of breakage that matters here.
 """
 import json
 import sys
+import time
 
 from playwright.sync_api import sync_playwright
 
@@ -47,6 +48,26 @@ def settle(pg, timeout=15000):
         "() => document.getElementById('chart-state').textContent !== 'updating…'",
         timeout=timeout)
     pg.wait_for_timeout(500)
+
+
+def until(fn, timeout=20.0, interval=0.25):
+    """
+    Wait for the OUTCOME, not for a guess at how long it takes.
+
+    Edits are debounced before they are sent, so waiting on "is a request in
+    flight?" can return before one has even started -- which made the title check
+    pass or fail depending on timing. Polling the thing being asserted has no such
+    window: it is true, or the timeout is a real failure.
+    """
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            if fn():
+                return True
+        except Exception:
+            pass
+        time.sleep(interval)
+    return False
 
 
 def drawn(pg, timeout=15000):
@@ -88,38 +109,39 @@ def run(pw, chartid, edit_col, paste_good, paste_bad):
     cell = pg.locator(f"#grid tbody tr:nth-child(1) td:nth-child({edit_col}) input")
     cell.click()
     cell.fill("999")
-    settle(pg)
-    check("5-6. editing a number changes the chart", before != chart_sig(pg))
+    check("5-6. editing a number changes the chart",
+          until(lambda: chart_sig(pg) not in (None, before)))
 
     # 7-8. edit the title ---------------------------------------------------
     title = pg.locator('input[data-caption="title"]')
     title.click()
     title.fill("Acceptance test heading")
-    settle(pg)
-    after = chart_title(pg)
-    check("7-8. editing the title changes the title",
-          after[0] == "Acceptance test heading"
-          or any("Acceptance test heading" in (a or "") for a in after[1]))
+
+    def title_landed():
+        t = chart_title(pg)
+        return (t[0] == "Acceptance test heading"
+                or any("Acceptance test heading" in (a or "") for a in t[1]))
+
+    check("7-8. editing the title changes the title", until(title_landed))
 
     # 9-10. replace the data with something compatible ----------------------
     pg.evaluate("document.getElementById('replace').showModal()")
     pg.locator("#paste").fill(paste_good)
     pg.locator("#use-paste").click()
-    settle(pg)
-    new_rows = pg.locator("#grid tbody tr").count()
-    check("9-10. compatible data renders in the same template",
-          pg.evaluate("() => !document.getElementById('chart').hidden")
-          and new_rows == len(paste_good.strip().splitlines()) - 1,
-          f"{new_rows} rows")
+    want = len(paste_good.strip().splitlines()) - 1
+    landed = until(lambda: pg.locator("#grid tbody tr").count() == want
+                   and pg.evaluate("() => !document.getElementById('chart').hidden"))
+    check("9-10. compatible data renders in the same template", landed,
+          f"{pg.locator('#grid tbody tr').count()} rows, wanted {want}")
 
     # 11. and something incompatible ---------------------------------------
     pg.evaluate("document.getElementById('replace').showModal()")
     pg.locator("#paste").fill(paste_bad)
     pg.locator("#use-paste").click()
-    settle(pg)
-    notes = pg.evaluate("""() => [...document.querySelectorAll('#notes .note')]
+    read_notes = lambda: pg.evaluate("""() => [...document.querySelectorAll('#notes .note')]
         .map(n => [n.className.replace('note ',''), n.innerText.trim()])""")
-    surfaced = [t for lvl, t in notes if lvl in ("error", "warning")]
+    until(lambda: any(lvl in ("error", "warning") for lvl, _ in read_notes()))
+    surfaced = [t for lvl, t in read_notes() if lvl in ("error", "warning")]
     check("11. incompatible data produces an actionable error", bool(surfaced),
           json.dumps(surfaced[:1])[:200])
     check("11b. the message names the column, not a stack trace",
@@ -130,9 +152,14 @@ def run(pw, chartid, edit_col, paste_good, paste_bad):
           pg.evaluate("""() => [...document.querySelectorAll('#grid thead th')]
               .filter(th => th.classList.contains('k-number'))
               .every(th => getComputedStyle(th).textAlign === 'right')"""))
-    check("no pandas storage types on screen",
-          not pg.evaluate("""() => /\\bobject\\b|float64|int64|datetime64/.test(
-              document.querySelector('main').innerText)"""))
+    # Finding 5 was on the ENTRY page, which is where the contract is printed --
+    # checking the workspace for it would have passed without testing anything.
+    pg.goto(f"{BASE}/chart/{chartid}", wait_until="networkidle")
+    storage_types = "() => /\\bobject\\b|float64|int64|datetime64/.test(" \
+                    "document.querySelector('main').innerText)"
+    check("no pandas storage types on the entry page", not pg.evaluate(storage_types))
+    pg.goto(f"{BASE}/chart/{chartid}?dev=1", wait_until="networkidle")
+    check("...but they are still there in developer view", pg.evaluate(storage_types))
 
     check("no uncaught JS errors", not errs, "; ".join(errs[:2]))
     b.close()

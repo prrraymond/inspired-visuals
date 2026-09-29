@@ -93,6 +93,23 @@ configured for this repository point to a known GitHub host".
 
 **Now:** `origin` is `https://github.com/prrraymond/inspired-visuals.git`.
 
+### 7. The acceptance test was flaky, and one check tested the wrong page
+
+**Was:** two problems in `tests/acceptance_flow.py`, both found while verifying
+the fixes above.
+
+Edits are debounced before they are sent, so waiting on "is a request in
+flight?" could return before one had even started — the title check passed or
+failed depending on timing. And the check for finding 5 ran on the *workspace*,
+which never printed storage types; the bug was on the entry page, so it would
+have passed without testing anything.
+
+**Now:** every assertion polls the outcome it is asserting, with a timeout, so
+a failure is a real failure. The dtype check runs on the entry page, and also
+asserts the raw dtype is *still* shown in developer view.
+
+**Checked:** three consecutive clean runs, 42 checks each.
+
 ### Not fixed, and why
 
 - **The fixed `CHT-85FB02` template is not in Supabase storage.**
