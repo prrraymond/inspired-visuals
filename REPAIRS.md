@@ -159,6 +159,75 @@ run. It reports today's outage correctly.
 
 ---
 
+## 2026-09-29 (later still) — the pipeline was pointed at the wrong project
+
+**Established with the user:** `sdpvhujlgakikcizaklw` is an **old project that is
+paused**. The current workstream lives in `tnzqhmecjcdgfoemhfdq`, which holds the
+real warehouse — `311_daily` (984,848 rows), `acs_b25013_tenure_edu`,
+`government_spending_nipa`, `nfl_game_actives`.
+
+So the broken images were not an outage. The pipeline had been writing to a
+project the workstream had already left, and nothing said so.
+
+### What the configuration actually described
+
+| Variable | Project named |
+|---|---|
+| `SUPABASE_URL` | old |
+| `SUPABASE_SERVICE_ROLE_KEY` | old |
+| `SUPABASE_ANON_KEY` | old |
+| `NEXT_PUBLIC_SUPABASE_ANON_SECRET` | old (and it is a **service_role** key despite the name) |
+| `SUPABASE_DB_URL` | old |
+| `SUPABASE_DB_URL_DIRECT` | **current** |
+
+One variable out of six named the current project, and it was the only one the
+viz pipeline does not read.
+
+### Done
+
+- **Bucket made public.** `viz-training-assets` exists in the current project
+  (created 2025-08-27) but was private, while `library.PUBLIC` builds
+  `/object/public/` URLs and Notion must fetch images without auth. Set via
+  `storage.buckets` on the direct connection. Verified: the endpoint now answers
+  `NoSuchKey` (bucket reachable, object absent) rather than `NoSuchBucket`.
+- **`Scripts/lib/supabase_config.py`** — a Supabase JWT carries its project `ref`
+  as a public claim, so "do the keys match `SUPABASE_URL`?" is provable rather
+  than something a person has to notice. Runs in `library.check_credentials()`,
+  so the gallery shows it as a banner, and in `Scripts/check_assets.py`. Verified
+  against a synthetic half-migrated config: it names the offending variable and
+  both projects.
+- **`viz_gallery/CLAUDE.md`** now documents both projects, which is current, and
+  what each holds.
+
+### Blocked on credentials
+
+There are **no API keys for the current project** anywhere in `.env.local` — all
+three JWTs were issued for the old one, and a key from one project never
+authenticates against another. Storage uploads cannot be done over the direct
+Postgres connection: `storage.objects` is metadata; the bytes go through the
+storage API, which needs a key.
+
+Needed in `.env.local` (from Supabase dashboard → Project Settings → API for
+`tnzqhmecjcdgfoemhfdq`):
+
+```
+SUPABASE_URL=https://tnzqhmecjcdgfoemhfdq.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service_role key for tnzqhmecjcdgfoemhfdq>
+SUPABASE_ANON_KEY=<anon key for tnzqhmecjcdgfoemhfdq>
+SUPABASE_DB_URL=<pooler URL for tnzqhmecjcdgfoemhfdq>
+```
+
+`Scripts/check_assets.py` will confirm all four agree before anything writes.
+
+### Decided: start clean
+
+The ~220 source screenshots exist only in the paused project and are **not**
+being migrated. The current project's catalog will be re-intaken from source
+images chosen later. The 400 existing Notion rows keep their now-dead asset
+links until re-intake replaces them — **nothing in Notion has been deleted.**
+
+---
+
 ## 2026-09-24 — course correction: library and workspace
 
 Reframed the prototype around choosing and making a chart rather than around

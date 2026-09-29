@@ -35,9 +35,12 @@ import sys
 import requests
 from dotenv import load_dotenv
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                "gallery"))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_ROOT, "gallery"))
+sys.path.insert(0, os.path.join(_ROOT, "Scripts", "lib"))
 load_dotenv(dotenv_path=".env.local")
+
+import supabase_config  # noqa: E402
 
 ASSET_PROPS = ("Asset URL", "Thumbnail", "Chart Image", "Base Code URL")
 
@@ -45,52 +48,22 @@ ASSET_PROPS = ("Asset URL", "Thumbnail", "Chart Image", "Base Code URL")
 # --------------------------------------------------------------------------- #
 # 1. configuration
 # --------------------------------------------------------------------------- #
-def _ref_of_jwt(token: str | None) -> str | None:
-    """The project a Supabase JWT was issued for. Public claim; no secret printed."""
-    if not token or token.count(".") != 2:
-        return None
-    payload = token.split(".")[1] + "=" * (-len(token.split(".")[1]) % 4)
-    try:
-        return json.loads(base64.urlsafe_b64decode(payload)).get("ref")
-    except Exception:
-        return None
-
-
 def _host(url: str | None) -> str | None:
     m = re.match(r"^\w+://(?:[^@/]*@)?([^:/?]+)", url or "")
     return m.group(1) if m else None
 
 
-def config_refs() -> dict:
-    url = os.getenv("SUPABASE_URL") or ""
-    db = os.getenv("SUPABASE_DB_URL") or ""
-    m_user = re.search(r"://([^:]+):", db)
-    m_ref = re.search(r"postgres\.([a-z]{20})", m_user.group(1) if m_user else "")
-    return {
-        "SUPABASE_URL": (_host(url) or "").split(".")[0] or None,
-        "SUPABASE_SERVICE_ROLE_KEY": _ref_of_jwt(os.getenv("SUPABASE_SERVICE_ROLE_KEY")),
-        "SUPABASE_ANON_KEY": _ref_of_jwt(os.getenv("SUPABASE_ANON_KEY")),
-        "SUPABASE_DB_URL": m_ref.group(1) if m_ref else None,
-    }
-
-
 def check_config(why: bool) -> list[str]:
-    problems: list[str] = []
-    refs = config_refs()
-
+    refs = supabase_config.refs()
     print("Configuration")
-    for name, ref in refs.items():
-        print(f"  {name:<28} {ref or '(not set)'}")
-    present = {r for r in refs.values() if r}
-    if not present:
-        return ["no Supabase project is configured at all"]
-    if len(present) > 1:
-        problems.append(
-            "the configuration names more than one Supabase project "
-            f"({', '.join(sorted(present))}); the variables have drifted apart")
-        print(f"\n  ! these must all name the same project. They do not.")
+    for name, r in refs.items():
+        print(f"  {name:<28} {r or '(not set)'}")
 
-    ref = refs["SUPABASE_URL"]
+    problems = supabase_config.problems()
+    for p in problems:
+        print(f"\n  ! {p}")
+
+    ref = supabase_config.project_ref()
     if not ref:
         return problems + ["SUPABASE_URL is not set"]
 

@@ -49,6 +49,10 @@ def check_credentials() -> list[str]:
                       ("SUPABASE_URL", SUPABASE_URL)]:
         if not val:
             problems.append(f"{name} is not set")
+    # A key issued for a different project than SUPABASE_URL names is provable,
+    # not a judgement call -- and going unnoticed is what pointed 801 catalog
+    # URLs at a project the workstream had already left.
+    problems.extend(supabase_config.problems())
     return problems
 
 
@@ -227,6 +231,7 @@ def _styling(props: dict, contract: Optional[dict], repointed: bool) -> list[dic
 # disagree, which is the exact failure the concept exists to describe.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                 "Scripts", "lib"))
+import supabase_config  # noqa: E402
 from provenance import resolve_state, REPOINTED  # noqa: E402
 
 
