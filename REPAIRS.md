@@ -159,6 +159,54 @@ run. It reports today's outage correctly.
 
 ---
 
+## 2026-10-03 — the AWS step was skipped; where the images actually are
+
+**Question raised:** was an S3 bucket also in play?
+
+**No.** `Scripts/export_images_to_storage.py` carries an `S3Driver`, but its
+three configuration lines are **commented out** (`AWS_REGION`, `S3_BUCKET`,
+`S3_PUBLIC_BASE`), so `S3Driver.__init__` raises `NameError` before it reaches
+`boto3`. There are no AWS variables in `.env.local` and no other `boto3` usage
+in the repo. `STORAGE_PROVIDER` defaults to `supabase`. Everything went to
+Supabase, as the user recalled.
+
+Two further latent faults in that same script, not fixed (it is not on the
+current path):
+
+- `SupabaseDriver.upload_png` returns `SUPABASE_PUBLIC_BASE`, which is also
+  commented out — `NameError` on every *successful* upload.
+- It authenticates with `SUPABASE_ANON_KEY`; storage writes need `service_role`.
+
+**`Scripts/hydrate_viz_library_v3.py` reviewed.** It is Stage D and never reads
+source images. The "multiple folders" are prefixes *inside the one bucket*:
+
+| Prefix | Written by | Holds |
+|---|---|---|
+| `raw/` | Stage A input | the source screenshots |
+| `files/<cid>/<cid>_thumb.jpg` | Stage A | thumbnails |
+| `base_code_templates/` | Stage C | abstract templates |
+| `datasets/<cid>/<cid>.csv` | Stage D | the dataset Final SQL returned |
+| `code/<cid>/<cid>_final.py` | Stage D | hydrated code |
+| `charts/<cid>/<cid>_chart.png` | Stage D | the rendered chart |
+
+### The source corpus is on disk after all
+
+**746 unique images** across four folders (verified by SHA-256; `Design ideas 4`
+and `Design ideas 4 2` are byte-identical copies of each other):
+
+| Folder | Images | Match a catalog row by filename |
+|---|---|---|
+| `~/Downloads/Design ideas 4` | 459 | 0 |
+| `~/Desktop/design examples` | 119 | 117 |
+| `~/Desktop/designs25` | 117 | 89 |
+| `~/Desktop/DesignFeb26` | 51 | 0 |
+
+**206 of the 399** catalog source images are recoverable by exact filename; 193
+are not. Sampled content from the largest folder: published editorial charts —
+the same kind of material the catalog was built from.
+
+---
+
 ## 2026-10-03 (resolved) — config repointed to the current project
 
 All four variables now name `tnzqhmecjcdgfoemhfdq`, and it is verified end to
