@@ -159,6 +159,44 @@ run. It reports today's outage correctly.
 
 ---
 
+## 2026-10-03 (resolved) — config repointed to the current project
+
+All four variables now name `tnzqhmecjcdgfoemhfdq`, and it is verified end to
+end rather than assumed:
+
+| Check | Result |
+|---|---|
+| `service_role` → `/storage/v1/bucket` | **HTTP 200**, `viz-training-assets`, `public=true` |
+| `SUPABASE_DB_URL` → Postgres | connects; 9 public tables; `311_daily` 984,848 rows |
+| `tnzqhmecjcdgfoemhfdq.supabase.co` | resolves |
+| 801 catalog asset URLs | all unreachable — **expected**, they still point at the old project |
+
+`SUPABASE_DB_URL` was set by copying `SUPABASE_DB_URL_DIRECT`, which was already
+correct. `.env.local` was backed up first and only that one line changed. The
+pooler host already in the config (`aws-1-us-east-2`) belongs to the old project
+and answers `FATAL (ENOTFOUND) tenant/user` for this one — pooler hostnames are
+region-specific, so the direct host is used instead.
+
+### Two bugs in the preflight itself, found by using it
+
+- **`ref_of_db_url` only understood the pooler shape.** A direct connection
+  string puts the ref in the second host label (`db.<ref>.supabase.co`) rather
+  than in the username (`postgres.<ref>`), so a correct URL was reported as
+  "not a recognisable Supabase key or URL". That is the same false-alarm failure
+  the new-key-format handling was added to avoid, in a second place. Both shapes
+  are parsed now, and a non-Supabase URL still returns nothing.
+- **The progress counter used `\r` unconditionally**, so piping the output
+  printed 801 lines and buried the summary. It now only animates on a terminal.
+
+### Still outstanding
+
+The 801 asset URLs point at the paused project and will stay broken until
+re-intake replaces them. Nothing in Notion has been deleted. Scope is still
+undecided — against the current warehouse only 4 of 400 rows reference tables
+that exist.
+
+---
+
 ## 2026-10-03 (later) — why the wrong key looked like the right one
 
 The credentials in `.env.local` were reported as matching the current project's

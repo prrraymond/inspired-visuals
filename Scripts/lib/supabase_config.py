@@ -65,14 +65,32 @@ def ref_of_url(url: str | None) -> str | None:
     return m.group(1) if m else None
 
 
+# A Postgres connection string carries the ref in one of two places, depending on
+# which host the dashboard offered:
+#   pooler  postgresql://postgres.<ref>:pw@aws-1-<region>.pooler.supabase.com:6543/…
+#   direct  postgresql://postgres:pw@db.<ref>.supabase.co:5432/…
+# Only the first was handled, so a perfectly good direct URL was reported as
+# unrecognisable -- a guard raising a false alarm on a working config, which is
+# the failure mode this module exists to avoid.
+_POOLER_REF = re.compile(r"^postgres\.([a-z0-9]{16,})$")
+_HOST_REF = re.compile(r"(?:^|\.)([a-z0-9]{16,})\.supabase\.(?:co|com)$")
+
+
 def ref_of_db_url(url: str | None) -> str | None:
-    """Pooler URLs carry the ref in the username: postgres.<ref>."""
-    m = re.search(r"://([^:@/]+)", url or "")
-    if m:
-        got = re.search(r"postgres\.([a-z0-9]+)", m.group(1))
-        if got:
-            return got.group(1)
-    return ref_of_url(url)
+    """The project ref in a Supabase Postgres URL, pooler or direct."""
+    if not url:
+        return None
+    m = re.match(r"^\w+://(?:([^:@/]+)(?::[^@]*)?@)?([^:/?]+)", url)
+    if not m:
+        return None
+    user, host = m.group(1) or "", m.group(2) or ""
+    got = _POOLER_REF.match(user)
+    if got:
+        return got.group(1)
+    got = _HOST_REF.search(host)
+    if got:
+        return got.group(1)
+    return None
 
 
 def refs(env: dict | None = None) -> dict[str, str | None]:

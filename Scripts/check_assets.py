@@ -139,8 +139,12 @@ def sweep(assets, why: bool) -> list[str]:
         states[state] += 1
         if state != "ok":
             failures.append(f"{cid} · {name} · {state}")
-        print(f"\r  checked {sum(states.values())}/{len(assets)}", end="", flush=True)
-    print()
+        # \r only makes sense on a terminal; piped or redirected it writes one
+        # line per asset and buries the summary under 801 of them.
+        if sys.stdout.isatty():
+            print(f"\r  checked {sum(states.values())}/{len(assets)}", end="", flush=True)
+    if sys.stdout.isatty():
+        print()
 
     for state, n in states.most_common():
         print(f"  {n:>5}  {state}")
