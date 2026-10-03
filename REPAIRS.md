@@ -159,6 +159,40 @@ run. It reports today's outage correctly.
 
 ---
 
+## 2026-10-03 — still no keys for the current project, and a scope finding
+
+**Checked `.env.local` again** (modified today 13:50). The Supabase credentials
+are unchanged: every key is still issued for the **old, paused** project.
+
+| Variable | Kind | Project |
+|---|---|---|
+| `SUPABASE_URL` | URL | old |
+| `SUPABASE_SERVICE_ROLE_KEY` | JWT (service_role) | old |
+| `SUPABASE_ANON_KEY` | JWT (anon) | old |
+| `NEXT_PUBLIC_SUPABASE_ANON_SECRET` | JWT (service_role) | old |
+| `SUPABASE_DB_URL` | URL | old |
+| `SUPABASE_DB_URL_DIRECT` | URL | **current** |
+
+Keys issued for `tnzqhmecjcdgfoemhfdq`: **none.** The file looks complete —
+nothing is empty — which is precisely why this went unnoticed for weeks. A
+`service_role` JWT is signed by one project and does not authenticate against
+another; the only way to tell is the `ref` claim inside it.
+
+### Scope finding: the catalog cannot hydrate against the current warehouse
+
+Ran every catalog row's SQL against the current project's `public` schema:
+
+- **396 of 400** rows carry SQL
+- **308** distinct tables referenced; **3** of them exist
+- **4 rows** reference tables that all exist
+
+This is the known shape of the catalog — the SQL is a spec written ahead of the
+tables, not broken code — but it means re-intaking 400 rows into the current
+project would produce 396 entries that cannot be hydrated. Worth settling what
+"start clean" should cover before any intake run.
+
+---
+
 ## 2026-09-29 (later still) — the pipeline was pointed at the wrong project
 
 **Established with the user:** `sdpvhujlgakikcizaklw` is an **old project that is
