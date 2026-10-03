@@ -153,13 +153,66 @@ def sweep(assets, why: bool) -> list[str]:
             if failures else [])
 
 
+def identify_key() -> int:
+    """
+    Say which project a key belongs to, before it goes anywhere near .env.local.
+
+    Two Supabase JWTs from different projects share their first ~110 characters,
+    so comparing them by eye does not work and has not worked. The key is read
+    with getpass: it is not echoed, and it does not enter shell history.
+    """
+    import getpass
+    import hashlib
+
+    key = getpass.getpass("Paste the key (it will not be shown): ").strip()
+    if not key:
+        print("Nothing pasted.")
+        return 1
+
+    print(f"\n  sha256 (first 12)  {hashlib.sha256(key.encode()).hexdigest()[:12]}")
+    print(f"  length             {len(key)} chars")
+
+    ref = supabase_config.ref_of_jwt(key)
+    if ref == supabase_config.UNVERIFIABLE:
+        print("  format             new-style key (sb_publishable_/sb_secret_)")
+        print("  project            not stated in the key — only an API call can confirm it")
+        return 0
+    if ref is None:
+        print("  format             not a Supabase key")
+        return 1
+
+    role = None
+    try:
+        import base64 as _b64
+        payload = key.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        role = json.loads(_b64.urlsafe_b64decode(payload)).get("role")
+    except Exception:
+        pass
+    print(f"  format             legacy JWT")
+    print(f"  role               {role}")
+    print(f"  project            {ref}")
+
+    configured = supabase_config.project_ref()
+    if configured and ref != configured:
+        print(f"\n  ! SUPABASE_URL names {configured}. This key is for a different project.")
+        return 1
+    print("\n  This key matches the project SUPABASE_URL names." if configured else "")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--all", action="store_true", help="check every asset, not a sample")
     ap.add_argument("--limit", type=int, default=12, help="sample size (default 12)")
     ap.add_argument("--why", action="store_true", help="list the individual failures")
+    ap.add_argument("--identify-key", action="store_true",
+                    help="paste a Supabase key and be told which project it belongs to")
     args = ap.parse_args()
+
+    if args.identify_key:
+        return identify_key()
 
     problems = check_config(args.why)
     if problems:

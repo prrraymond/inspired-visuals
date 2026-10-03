@@ -159,6 +159,34 @@ run. It reports today's outage correctly.
 
 ---
 
+## 2026-10-03 (later) — why the wrong key looked like the right one
+
+The credentials in `.env.local` were reported as matching the current project's
+dashboard. They do not. Settled empirically rather than by reading claims — the
+keys were sent to `tnzqhmecjcdgfoemhfdq` and rejected:
+
+```
+service_role -> /storage/v1/bucket   403  signature verification failed
+anon         -> /rest/v1/            401  Invalid API key
+```
+
+"Signature verification failed" is conclusive: the token was signed with a
+different project's secret.
+
+**Why comparing them by eye cannot work.** The `anon` and `service_role` keys in
+`.env.local` share their **first 110 characters** with each other, and any
+Supabase JWT shares that opening with any other. The header is identical across
+all projects and the `ref` sits in the payload past the point anyone reads. Two
+keys from different projects are indistinguishable at a glance.
+
+**Added:** `Scripts/check_assets.py --identify-key`. Reads a key with `getpass`
+— not echoed, not in shell history — and prints only its project, role, length
+and a short SHA-256 fingerprint, then compares it against `SUPABASE_URL`. Lets a
+key be checked *before* it is pasted into `.env.local`, and gives a fingerprint
+that can be compared against the dashboard without reading 200 characters.
+
+---
+
 ## 2026-10-03 — still no keys for the current project, and a scope finding
 
 **Checked `.env.local` again** (modified today 13:50). The Supabase credentials
