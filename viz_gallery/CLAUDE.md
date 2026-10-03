@@ -86,6 +86,7 @@ There is no `4. Complete`. Stage D writes `4. Hydrated`.
 | Stage | Script | Reads | Writes |
 |---|---|---|---|
 | A. Intake | `bootstrap_supabase_to_notion_v2.py` | Supabase bucket images | Viz library rows at `1. Intake`, thumbnails (Gemini) |
+| | ↳ `--check` runs the preflight only (config, Gemini key+model, Notion DB) and exits | | |
 | B. Annotate | `notion_chart_annotator_vizlib_v2.py` | Viz library by status | structured params (Gemini) |
 | — | human review / SQL authoring | | `2. In progress` |
 | C. Base codegen | `generate_base_code_v2.py` | Viz library + chart image | template → storage; `Base Code URL`, `Source code`, `Caveats`, `QA notes`, `Title`, `Status = 3. Needs hydration`, full code block on the page (Claude vision) |

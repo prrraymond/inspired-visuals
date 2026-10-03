@@ -159,6 +159,32 @@ run. It reports today's outage correctly.
 
 ---
 
+## 2026-10-03 — Stage A hardened before the 746-image run
+
+Three ways `bootstrap_supabase_to_notion_v2.py` could fail without saying so,
+all fixed before it is pointed at the full corpus:
+
+- **A failed Notion write exited 0.** `create_notion_page` caught every
+  exception and printed it. The run would finish "successfully" having written
+  nothing. It raises now, the failure is counted, and the process exits
+  non-zero if any image failed.
+- **A failed duplicate check created duplicates.** `check_if_chart_exists`
+  returned `None` on any Notion error — indistinguishable from "no such row" —
+  so a transient 5xx mid-run would have created a second row for an image that
+  already had one. It raises now and stops the run; re-running is safe because
+  existing rows are skipped by chart ID.
+- **No retry on rate limits.** 746 sequential Gemini calls will meet a 429 or a
+  503. Those are retried with backoff, four attempts; any other status is
+  reported with its body and the image is counted as failed.
+
+Also added `--check`: runs the preflight — Supabase config consistency, Gemini
+key and model availability, Notion database reachability — and exits. Against
+the current dead key it fails in 2.6 seconds instead of after the first
+download, and it names the target database (`Viz library`) so the wrong-DB
+mistake made twice before is visible before any write.
+
+---
+
 ## 2026-10-03 — corpus uploaded; three findings before Stage A can run
 
 **Done:** 746 unique screenshots uploaded to `raw/` in the current project,

@@ -26,6 +26,8 @@ from PIL import Image
 
 # --- CONFIGURATION & CLIENTS ---
 load_dotenv(dotenv_path=".env.local")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
+import supabase_config  # noqa: E402
 
 # Supabase Configuration
 SA_URL = os.getenv("SUPABASE_URL")
@@ -106,19 +108,33 @@ def analyze_image_with_gemini(img_bytes: bytes, why: bool = False) -> Optional[D
     url = f"{GEMINI_BASE_URL}/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     
-    try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=90)
-        response.raise_for_status()
-        
-        result = response.json()
-        json_text = result["candidates"][0]["content"]["parts"][0]["text"]
-        
-        metadata = json.loads(json_text)
+    # 746 calls in a row will meet a 429 or a 503. Retry those with backoff;
+    # anything else is a real answer and is reported, not hidden.
+    last = None
+    for attempt in range(4):
+        try:
+            response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=90)
+        except requests.RequestException as e:
+            last = type(e).__name__
+            time.sleep(2 ** attempt)
+            continue
+        if response.status_code in (429, 500, 502, 503, 504):
+            last = f"HTTP {response.status_code}"
+            time.sleep(min(30, 3 * 2 ** attempt))
+            continue
+        if response.status_code != 200:
+            print(f"  - ERROR: Gemini HTTP {response.status_code}: {response.text[:160]}")
+            return None
+        try:
+            json_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+            metadata = json.loads(json_text)
+        except Exception as e:
+            print(f"  - ERROR: Gemini returned an unexpected shape: {e}")
+            return None
         if why: print(f"  - Gemini analysis successful: {metadata.get('title')}")
         return metadata
-    except Exception as e:
-        print(f"  - ERROR: Gemini analysis failed. {e}")
-        return None
+    print(f"  - ERROR: Gemini analysis failed after retries ({last})")
+    return None
 
 # --- SUPABASE & NOTION HELPERS ---
 
@@ -204,15 +220,19 @@ def check_if_chart_exists(chartid: str) -> Optional[str]:
     headers = {"Authorization": f"Bearer {NOTION_API_KEY}", "Notion-Version": "2022-06-28", "Content-Type": "application/json"}
     
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        response.raise_for_status()
-        results = response.json().get("results", [])
-        return results[0]["id"] if results else None
-    except Exception as e:
-        print(f"  - ERROR: Could not query Notion to check for existing chart. {e}")
-        return None
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+    except requests.RequestException as e:
+        raise RuntimeError(f"Notion unreachable while checking {chartid}: {type(e).__name__}") from e
+    if response.status_code != 200:
+        # Returning None here would read as "no such row" and create a duplicate
+        # on every transient Notion error. Stop the run instead; re-running is
+        # safe because existing rows are skipped.
+        raise RuntimeError(f"Notion refused the duplicate check for {chartid}: "
+                           f"HTTP {response.status_code} {response.text[:160]}")
+    results = response.json().get("results", [])
+    return results[0]["id"] if results else None
 
-def create_notion_page(chartid: str, asset_url: str, thumbnail_url: Optional[str], metadata: Dict[str, str], why: bool = False) -> None:
+def create_notion_page(chartid: str, asset_url: str, thumbnail_url: Optional[str], metadata: Dict[str, str], why: bool = False) -> Optional[str]:
     """Creates a new page in the Notion database with the provided data."""
     if why: print(f"  - Creating new Notion page for {chartid} with status '{STATUS_INTAKE}'...")
     
@@ -234,89 +254,148 @@ def create_notion_page(chartid: str, asset_url: str, thumbnail_url: Optional[str
     payload = {"parent": {"database_id": NOTION_DB_ID}, "properties": properties}
     
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload))
-        response.raise_for_status()
-        if why: print("  - Notion page created successfully.")
-    except Exception as e:
-        print(f"  - ERROR: Failed to create Notion page. Response: {e.response.text if hasattr(e, 'response') else e}")
+        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+    except requests.RequestException as e:
+        raise RuntimeError(f"Notion unreachable: {type(e).__name__}") from e
+    if response.status_code >= 400:
+        raise RuntimeError(f"HTTP {response.status_code} {response.text[:200]}")
+    if why: print("  - Notion page created successfully.")
+    return response.json().get("id")
+
+# --- PREFLIGHT ---
+def preflight(why: bool = False) -> List[str]:
+    """
+    Everything that would make a long run fail late, checked first. A dead API
+    key should fail in a second, not after the first image has been downloaded,
+    analysed and thumbnailed.
+    """
+    problems = supabase_config.problems()
+
+    try:
+        r = requests.get(f"{GEMINI_BASE_URL}/models?key={GEMINI_API_KEY}&pageSize=200", timeout=30)
+        if r.status_code != 200:
+            try:
+                msg = r.json()["error"]["message"]
+            except Exception:
+                msg = r.text[:120]
+            problems.append(f"Gemini rejected GOOGLE_API_KEY: {msg}")
+        else:
+            names = {m["name"].split("/")[-1] for m in r.json().get("models", [])
+                     if "generateContent" in m.get("supportedGenerationMethods", [])}
+            want = GEMINI_MODEL.split("/")[-1]
+            if want not in names:
+                near = sorted(n for n in names if "gemini" in n)[:8]
+                problems.append(f"GEMINI_MODEL={want!r} is not available to this key; "
+                                f"available include: {', '.join(near)}")
+            elif why:
+                print(f"  - Gemini: key accepted, model {want} available")
+    except requests.RequestException as exc:
+        problems.append(f"Gemini unreachable: {type(exc).__name__}")
+
+    try:
+        r = requests.get(f"{NOTION_BASE_URL}/databases/{NOTION_DB_ID}", timeout=30,
+                         headers={"Authorization": f"Bearer {NOTION_API_KEY}", "Notion-Version": "2022-06-28"})
+        if r.status_code != 200:
+            problems.append(f"Notion refused the database: HTTP {r.status_code} {r.text[:120]}")
+        elif why:
+            title = "".join(t.get("plain_text", "") for t in r.json().get("title", []))
+            print(f"  - Notion: writing to database {title!r}")
+    except requests.RequestException as exc:
+        problems.append(f"Notion unreachable: {type(exc).__name__}")
+    return problems
+
 
 # --- MAIN WORKFLOW ---
-def main(dry_run: bool, why: bool, limit: Optional[int]):
-    """Main function to execute the bootstrap process."""
-    if not supa:
-        print("ERROR: Supabase client is not initialized. Check your .env.local file.")
-        return
+def main(dry_run: bool, why: bool, limit: Optional[int]) -> int:
+    """Returns the number of images that failed. Zero means every image was handled."""
+    problems = preflight(why=why)
+    if problems:
+        print("Refusing to run — preflight found problems:")
+        for p in problems:
+            print(f"  - {p}")
+        return 1
 
     print(f"Scanning Supabase bucket '{SA_BUCKET}' in folder '{SA_INPUT_FOLDER}'...")
-    
     files = storage_list_files(SA_BUCKET, SA_INPUT_FOLDER, why=why)
-    image_files = [f for f in files if any(f["name"].lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp"])]
-    
+    image_files = [f for f in files
+                   if any(f["name"].lower().endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp"])]
     if not image_files:
-        print("No new image files found to process.")
-        return
-
+        print("No image files found to process.")
+        return 0
     print(f"Found {len(image_files)} potential chart images to process.")
-    
-    processed = 0
+
+    created = skipped = failed = 0
+    failures: List[str] = []
     for file_info in image_files:
-        if limit and processed >= limit:
+        if limit and (created + failed) >= limit:
             print(f"Limit of {limit} reached. Stopping.")
             break
-            
         file_key = f"{SA_INPUT_FOLDER}/{file_info['name']}"
-        print(f"\nProcessing file: {file_key}")
-        
         chartid = generate_chartid(file_key)
-        
+
         if check_if_chart_exists(chartid):
-            if why: print(f"  - SKIP: Chart ID {chartid} already exists in Notion.")
+            skipped += 1
+            if why: print(f"SKIP {chartid} already in Notion: {file_key}")
             continue
-            
-        # Download image from Supabase
+        print(f"\nProcessing {chartid}: {file_key}")
+
         try:
             img_bytes = supa.storage.from_(SA_BUCKET).download(file_key)
             if not img_bytes:
-                if why: print("  - SKIP: Failed to download image from Supabase.")
-                continue
+                raise RuntimeError("download returned no bytes")
         except Exception as e:
-            if why: print(f"  - SKIP: Error downloading image: {e}")
+            failed += 1
+            failures.append(f"{chartid} download: {e}")
+            print(f"  - FAIL download: {e}")
             continue
 
-        # Get AI-powered metadata
         metadata = analyze_image_with_gemini(img_bytes, why=why)
         if not metadata:
-            if why: print("  - SKIP: Could not generate metadata from Gemini.")
+            failed += 1
+            failures.append(f"{chartid} analysis failed")
             continue
 
-        # Create and upload thumbnail
         thumbnail_url = None
         thumb_bytes = create_thumbnail(img_bytes, why=why)
         if thumb_bytes:
             thumbnail_url = upload_thumbnail_and_get_url(chartid, thumb_bytes, why=why)
-
-        # Get public URL for the original image
         asset_url = supa.storage.from_(SA_BUCKET).get_public_url(file_key)
-        
-        # Create Notion page
-        if not dry_run:
-            create_notion_page(chartid, asset_url, thumbnail_url, metadata, why=why)
+
+        if dry_run:
+            print(f"  - DRY RUN: would create {chartid} titled {metadata.get('title')!r}"
+                  f"{' with thumbnail' if thumbnail_url else ''}")
+            created += 1
         else:
-            print(f"  - DRY RUN: Would create Notion page for {chartid} with title: '{metadata.get('title')}'")
-            if thumbnail_url:
-                print(f"  - DRY RUN: Would include thumbnail URL.")
+            try:
+                create_notion_page(chartid, asset_url, thumbnail_url, metadata, why=why)
+                created += 1
+            except Exception as e:
+                failed += 1
+                failures.append(f"{chartid} notion: {e}")
+                print(f"  - FAIL notion: {e}")
+        time.sleep(1)  # be respectful to APIs
 
-        processed += 1
-        time.sleep(1) # Be respectful to APIs
+    print(f"\nDone. created={created} skipped_existing={skipped} failed={failed}")
+    for line in failures[:20]:
+        print(f"  ! {line}")
+    if len(failures) > 20:
+        print(f"  … and {len(failures) - 20} more")
+    return failed
 
-    print(f"\nDone. Processed {processed} new images.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Bootstrap Notion DB with chart images from Supabase, enriched with AI metadata.")
-    parser.add_argument("--dry-run", action="store_true", help="Simulate the process without writing to Notion.")
+    parser = argparse.ArgumentParser(
+        description="Bootstrap Notion DB with chart images from Supabase, enriched with AI metadata.")
+    parser.add_argument("--dry-run", action="store_true", help="Analyse and thumbnail, but write nothing to Notion.")
     parser.add_argument("--why", action="store_true", help="Enable verbose logging.")
     parser.add_argument("--limit", type=int, help="Maximum number of new images to process.")
+    parser.add_argument("--check", action="store_true", help="Run the preflight only and exit.")
     args = parser.parse_args()
-    
-    main(dry_run=args.dry_run, why=args.why, limit=args.limit)
 
+    if args.check:
+        found = preflight(why=True)
+        for p in found:
+            print(f"  - {p}")
+        print("Preflight: " + ("FAILED" if found else "OK"))
+        sys.exit(1 if found else 0)
+    sys.exit(1 if main(dry_run=args.dry_run, why=args.why, limit=args.limit) else 0)
