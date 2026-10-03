@@ -338,7 +338,7 @@ def upload_to_storage(key: str, data: bytes) -> str:
     how 507 catalog rows came to point at objects under code/ that do not exist.
     """
     print(f"  - Uploading template to Supabase at '{key}'...")
-    supa.storage.from_(BUCKET).upload(key, data, {"contentType": "text/plain", "upsert": "true"})
+    supa.storage.from_(BUCKET).upload(key, data, {"content-type": "text/plain", "upsert": "true"})
 
     folder, _, leaf = key.rpartition("/")
     # NB: .list() pages at 100 by default. Listing the whole folder and checking

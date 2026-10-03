@@ -138,7 +138,7 @@ def extract_property_value(prop: dict) -> Any:
 # --- STORAGE & DATABASE HELPERS ---
 def upload_to_storage(key: str, data: bytes, content_type: str, dry=False):
     if dry: return
-    supa.storage.from_(BUCKET).upload(key, data, {"contentType": content_type, "upsert": "true"})
+    supa.storage.from_(BUCKET).upload(key, data, {"content-type": content_type, "upsert": "true"})
 
 def get_storage_url(key: str) -> str:
     return supa.storage.from_(BUCKET).create_signed_url(key, SIGNED_URL_TTL)["signedURL"]
