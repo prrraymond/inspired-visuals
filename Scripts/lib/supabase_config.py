@@ -29,9 +29,28 @@ JWT_VARS = ("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_ANON_KEY")
 DB_VARS = ("SUPABASE_DB_URL",)
 
 
+# Supabase issues two generations of key. The legacy anon/service_role keys are
+# JWTs carrying the project `ref` as a public claim, which is what makes the
+# cross-check below possible. The newer `sb_publishable_…` / `sb_secret_…` keys
+# are opaque: they are perfectly valid, they simply do not say which project
+# they belong to. Those are reported as UNVERIFIABLE, never as wrong -- a guard
+# that cries wolf on a correct key would be worse than no guard.
+NEW_KEY = re.compile(r"^sb_(publishable|secret)_[A-Za-z0-9_-]{8,}$")
+UNVERIFIABLE = "\x00unverifiable"
+
+
 def ref_of_jwt(token: str | None) -> str | None:
-    """The `ref` claim of a Supabase JWT, or None. Decodes only; never verifies."""
-    if not token or token.count(".") != 2:
+    """
+    The `ref` claim of a Supabase JWT.
+
+    Returns None when there is no key, the sentinel UNVERIFIABLE for a valid
+    new-format key, and None for anything that is neither.
+    """
+    if not token:
+        return None
+    if NEW_KEY.match(token.strip()):
+        return UNVERIFIABLE
+    if token.count(".") != 2:
         return None
     payload = token.split(".")[1]
     payload += "=" * (-len(payload) % 4)
@@ -57,7 +76,11 @@ def ref_of_db_url(url: str | None) -> str | None:
 
 
 def refs(env: dict | None = None) -> dict[str, str | None]:
-    """{variable name: project ref} for every variable that names a project."""
+    """
+    {variable name: project ref} for every variable that names a project.
+
+    A value of UNVERIFIABLE means the key is valid but opaque about its project.
+    """
     env = env if env is not None else os.environ
     out: dict[str, str | None] = {}
     for name in URL_VARS:
@@ -87,9 +110,9 @@ def problems(env: dict | None = None) -> list[str]:
 
     missing = [n for n, r in found.items() if env.get(n) and r is None]
     for name in missing:
-        out.append(f"{name} is set but does not name a Supabase project")
+        out.append(f"{name} is set but is not a recognisable Supabase key or URL")
 
-    named = {n: r for n, r in found.items() if r}
+    named = {n: r for n, r in found.items() if r and r != UNVERIFIABLE}
     if not named:
         return out + ["no Supabase project is configured"]
 
@@ -106,3 +129,12 @@ def problems(env: dict | None = None) -> list[str]:
             + ". Credentials issued for one project do not work against another, "
               "and writes will land wherever SUPABASE_URL points.")
     return out
+
+
+def describe(ref: str | None) -> str:
+    """How a ref should be printed."""
+    if ref is None:
+        return "(not set)"
+    if ref == UNVERIFIABLE:
+        return "(valid key, project not stated)"
+    return ref

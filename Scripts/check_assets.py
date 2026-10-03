@@ -57,7 +57,7 @@ def check_config(why: bool) -> list[str]:
     refs = supabase_config.refs()
     print("Configuration")
     for name, r in refs.items():
-        print(f"  {name:<28} {r or '(not set)'}")
+        print(f"  {name:<28} {supabase_config.describe(r)}")
 
     problems = supabase_config.problems()
     for p in problems:
