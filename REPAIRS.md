@@ -159,6 +159,49 @@ run. It reports today's outage correctly.
 
 ---
 
+## 2026-10-03 — corpus uploaded; three findings before Stage A can run
+
+**Done:** 746 unique screenshots uploaded to `raw/` in the current project,
+every one verified against the object listing. `backups/viz-library-*.json`
+holds the 400 Notion rows as read before any overwrite.
+
+### 1. Every PNG was stored as `text/plain`
+
+All four live scripts passed `{"contentType": ...}` to `storage3`, which reads
+the key `"content-type"`. The unknown key was dropped without a word and the
+default applied. Fixed in the four scripts on the current path; the archived
+v1 scripts still carry it and are left alone.
+
+Re-uploading with the right key corrected the stored type (746 × `image/png`)
+but not the edge cache: Supabase's CDN kept `text/plain` for objects that had
+been fetched before the fix, and neither `upsert` nor delete-and-recreate
+purged it. **The blast radius is three objects** — the ones probed by hand
+before the re-upload. A random sample of 12 untouched objects all served
+`image/png` on a cache MISS. Those three will refresh on the CDN's schedule;
+the bytes behind every URL are correct PNGs regardless.
+
+### 2. Chart IDs collide by design, so the old rows must be archived first
+
+`generate_chartid` is SHA-256 of `raw/<filename>`, and all 400 existing rows
+regenerate to their stored ID exactly. Stage A skips an image whose ID already
+exists in Notion. Run as-is, the 206 images that match an old filename would be
+**skipped** and left pointing at the paused project. Archiving the 400 rows is
+therefore a precondition, not just a preference.
+
+### 3. The Gemini key is rejected
+
+`GOOGLE_API_KEY` is well-formed (39 chars, `AIza` prefix) but
+`generativelanguage.googleapis.com` answers `API key not valid`. Not a paste
+error — revoked, rotated, or issued for a different Google project. Stage A's
+only Gemini use is a title, a chart type and a one-sentence description per
+image. The Anthropic key authenticates (`claude-opus-5` listed), and Stage C
+already uses it for vision, so the same job can be done there.
+
+**Not done, deliberately:** the archive. The database is not being emptied
+until the refill path is confirmed working.
+
+---
+
 ## 2026-10-03 — the AWS step was skipped; where the images actually are
 
 **Question raised:** was an S3 bucket also in play?
