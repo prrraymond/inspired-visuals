@@ -159,6 +159,23 @@ run. It reports today's outage correctly.
 
 ---
 
+## 2026-10-03 — full Stage A run in progress (746 images)
+
+Launched against the current project with `gemini-3.8-flash`. The first
+attempt wrote 7 rows and was restarted with `python3 -u` so the log is
+unbuffered and the run can be watched; the restart skipped those 7 by chart ID,
+as designed. Verified alive from Notion's row count rather than from the log.
+Roughly 7 s per image with the per-call pause, so about 85 minutes.
+
+Monitored for every failure signature, not only the success tally — a crash
+mid-run is otherwise indistinguishable from "still running".
+
+**Resumable:** if it stops for any reason, re-running the same command picks up
+where it left off; existing rows are never duplicated. The final tally is
+recorded below when the run ends.
+
+---
+
 ## 2026-10-03 — old catalog archived; Stage A proven on two rows; full run started
 
 **Archived all 400 old rows** after re-verifying the backup matched them
