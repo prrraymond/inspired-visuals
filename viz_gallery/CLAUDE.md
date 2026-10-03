@@ -149,6 +149,29 @@ As of 2026-09-29 `SUPABASE_URL` and all three JWTs still name the **old** projec
 `SUPABASE_DB_URL_DIRECT` names the current one. Repointing needs API keys issued for
 `tnzqhmecjcdgfoemhfdq` — a key from one project never works against another.
 
+To repoint, four variables change:
+
+| Variable | Where it comes from |
+|---|---|
+| `SUPABASE_URL` | `https://<ref>.supabase.co` — the ref is in the dashboard address |
+| `SUPABASE_ANON_KEY` | Project Settings → API Keys |
+| `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → API Keys (revealed, not the publishable one) |
+| `SUPABASE_DB_URL` | the same value as `SUPABASE_DB_URL_DIRECT` — see below |
+
+**The pooler host is region-specific.** The `aws-1-us-east-2.pooler.supabase.com` host in the
+config belongs to the old project and does not serve the current one — it answers
+`FATAL (ENOTFOUND) tenant/user`. The current project's pooler host is on its
+Settings → Database page. `SUPABASE_DB_URL` is only read by `hydrate_viz_library_v3.py`, for
+one short-lived connection per run, so the **direct** host
+(`db.<ref>.supabase.co:5432`, `max_connections=60`) is sufficient and avoids the lookup.
+
+Check a key before pasting it — two Supabase JWTs from different projects share their first
+~110 characters, so comparing them by eye does not work:
+
+```
+python3 Scripts/check_assets.py --identify-key
+```
+
 **A Supabase JWT carries its project `ref` as a public claim**, so a mismatch between
 `SUPABASE_URL` and the keys is provable rather than something to notice.
 `Scripts/lib/supabase_config.py` does that check; it runs in `library.check_credentials()`
