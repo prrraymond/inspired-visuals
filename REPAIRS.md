@@ -159,6 +159,30 @@ run. It reports today's outage correctly.
 
 ---
 
+## 2026-10-03 — old catalog archived; Stage A proven on two rows; full run started
+
+**Archived all 400 old rows** after re-verifying the backup matched them
+(400 rows, 396 with SQL, every live row present in the backup). 400 archived,
+0 failed, 0 live rows remaining. Reversible from Notion's trash for 30 days.
+
+**Switched to Flash** at the user's prompting — `gemini-2.5-pro` was only ever
+the value in `.env.local`, and a title plus a type plus one sentence per image
+is a Flash task. First attempt failed usefully: `gemini-2.5-flash` is in the
+model listing but answers **404 "no longer available to new users"** on a real
+call. Google's own error names `gemini-3.8-flash`; it is pinned explicitly so
+runs are reproducible, and it answers a vision call.
+
+**The preflight trusted the listing, which was wrong.** `--check` now makes a
+real `generateContent` call against the configured model instead of looking it
+up — the listing and the truth disagreed on the very first try.
+
+**Smoke test:** `--limit 2 --why` → 2 created, 0 failed. Both rows verified in
+Notion: status `1. Intake`, source image serving `image/png`, thumbnail
+`image/jpeg`. One title is "Blank Image" because `baseball.png` is a clip-art
+icon, not a chart — the triage pass in Notion is what removes those.
+
+---
+
 ## 2026-10-03 — Stage A hardened before the 746-image run
 
 Three ways `bootstrap_supabase_to_notion_v2.py` could fail without saying so,

@@ -287,8 +287,22 @@ def preflight(why: bool = False) -> List[str]:
                 near = sorted(n for n in names if "gemini" in n)[:8]
                 problems.append(f"GEMINI_MODEL={want!r} is not available to this key; "
                                 f"available include: {', '.join(near)}")
-            elif why:
-                print(f"  - Gemini: key accepted, model {want} available")
+            else:
+                # The listing is not the truth: gemini-2.5-flash was listed and
+                # answered 404 "no longer available to new users" on the first
+                # real call. Only a real generateContent call proves the model.
+                probe = {"contents": [{"parts": [{"text": "Reply with the single word OK."}]}]}
+                pr = requests.post(f"{GEMINI_BASE_URL}/models/{want}:generateContent?key={GEMINI_API_KEY}",
+                                   json=probe, timeout=60)
+                if pr.status_code != 200:
+                    try:
+                        msg = pr.json()["error"]["message"]
+                    except Exception:
+                        msg = pr.text[:200]
+                    problems.append(f"GEMINI_MODEL={want!r} is listed but refuses calls: "
+                                    f"HTTP {pr.status_code} {msg[:220]}")
+                elif why:
+                    print(f"  - Gemini: key accepted, model {want} answers")
     except requests.RequestException as exc:
         problems.append(f"Gemini unreachable: {type(exc).__name__}")
 
