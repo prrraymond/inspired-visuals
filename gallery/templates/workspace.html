@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}{{ spec.name }}{% endblock %}
+{% block head %}<script src="{{ url_for('plotly_js') }}"></script>{% endblock %}
+{% block main_attrs %} class="ws"{% endblock %}
+
+{% block content %}
+<a class="back" href="{{ url_for('index') }}">&larr; All charts</a>
+
+<header class="ws-head">
+  <div>
+    <h1>{{ spec.name }}</h1>
+    <p class="lede">{{ spec.job }}</p>
+  </div>
+</header>
+
+<div class="ws-grid">
+  <div class="ws-main">
+
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Chart</h3>
+        <span class="hint" id="chart-state"></span>
+      </div>
+      <div class="chart-wrap">
+        <div id="chart"></div>
+        <div id="chart-problem" class="refusal" hidden></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Data</h3>
+        <span class="hint" id="data-count"></span>
+        <div class="panel-actions">
+          <button type="button" class="btn quiet" id="add-row">Add row</button>
+          <button type="button" class="btn quiet" id="reset-data">Reset to sample</button>
+          <button type="button" class="btn" id="open-replace">Replace data</button>
+        </div>
+      </div>
+      <div id="notes" class="notes"></div>
+      <div class="grid-scroll"><table id="grid"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+  </div>
+
+  <aside class="ws-side">
+    <section class="panel">
+      <div class="panel-head"><h3>Chart text</h3></div>
+      <p class="panel-note">The words are yours. The template supplies the shape.</p>
+      <div id="captions"></div>
+    </section>
+
+    <section class="panel" id="settings-panel" hidden>
+      <div class="panel-head"><h3>Chart settings</h3></div>
+      <div id="settings"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h3>What this chart needs</h3></div>
+      <p class="panel-note">{{ spec.needs }}</p>
+      <ul class="needs" id="needs"></ul>
+    </section>
+
+    <details class="panel details">
+      <summary>Template details</summary>
+      <div class="details-body">
+        {% if entry %}
+          <ul class="facts">
+            <li><span>Chart id</span><span>{{ chartid }}</span></li>
+            <li><span>Catalogued as</span><span>{{ entry.title }}</span></li>
+            <li><span>Status</span><span>{{ entry.status or '—' }}</span></li>
+          </ul>
+          {% if entry.caveats %}
+            <h4>Things this shape can’t do</h4>
+            <ul class="caveats">
+              {% for c in entry.caveats %}<li>{{ c }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+        {% endif %}
+        <p class="panel-note">
+          Everything the pipeline knows about this entry — its contract, provenance,
+          SQL and generated code — is on the
+          <a href="{{ url_for('detail', chartid=chartid) }}">entry page</a>.
+        </p>
+        {% if dev %}
+          <h4>Render log</h4>
+          <pre class="log" id="log"></pre>
+        {% endif %}
+      </div>
+    </details>
+  </aside>
+</div>
+
+<dialog id="replace" class="sheet">
+  <form method="dialog">
+    <h3>Replace the data</h3>
+    <p class="panel-note">Paste rows from a spreadsheet, or a CSV. Keep the first row as
+      column names.</p>
+    <textarea id="paste" rows="12" spellcheck="false"
+              placeholder="{{ state.grid.columns | join(',') }}&#10;..."></textarea>
+    <p class="sheet-err" id="paste-err" hidden></p>
+    <menu>
+      <button value="cancel" class="btn quiet">Cancel</button>
+      <button value="use" class="btn" id="use-paste">Use this data</button>
+    </menu>
+  </form>
+</dialog>
+
+<script id="bootstrap" type="application/json">{{ state | tojson }}</script>
+<script>window.CHART_ID = {{ chartid | tojson }};</script>
+<script src="{{ url_for('static', filename='workspace.js') }}"></script>
+{% endblock %}
