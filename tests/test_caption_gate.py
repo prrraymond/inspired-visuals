@@ -30,6 +30,11 @@ MUST_PASS = [
     ('arrow before placeholder', 'fig.add_annotation(text="\u2190 Axis label")'),
     ('arrow after placeholder',  'fig.add_annotation(text="Axis label \u2192")'),
     ('bulleted placeholder',     'fig.add_annotation(text="\u2022 Category A")'),
+    ('entity arrow + canonical', 'fig.add_annotation(text="&#8592; Below baseline")'),
+    ('canonical + entity arrow', 'fig.add_annotation(text="Above baseline &#8594;")'),
+    ('named entity arrow',       'fig.add_annotation(text="&rarr; Axis label")'),
+    ('format spec only',         'VALUE_LABEL_FORMAT = "{:.1f}%"'),
+    ('format spec with unit',    'VALUE_LABEL_FORMAT = "{:,.0f}"'),
     ('column identifier',        'label_flag_column = "show_label"'),
     ('encoding, not caption',    'go.Choropleth(locationmode="USA-states")'),
 ]
@@ -45,6 +50,8 @@ MUST_FLAG = [
     ('subject in dict',          'dict(text="Admissions rate at elite colleges")'),
     ('arrow cannot launder',     'fig.add_annotation(text="\u2190 POORER")'),
     ('arrow + subject',          'fig.add_annotation(text="Texas leads \u2192")'),
+    ('entity cannot launder',    'fig.add_annotation(text="&#8592; POORER")'),
+    ('format spec + subject',    'VALUE_LABEL_FORMAT = "Arrests: {:.1f}%"'),
 ]
 
 

@@ -296,21 +296,60 @@ def parse_json_strict(s: str) -> dict:
         raise ValueError(f"Model did not return valid JSON (first 200 chars: {s[:200]!r})")
 
 
+# Asking the model to hand-write JSON with a Python module embedded in a string
+# field is fragile: one unescaped character, or a response that stops mid-string,
+# and the whole result is unparseable. Two charts failed that way at different
+# offsets, which is the signature of truncation rather than a malformed escape --
+# thinking tokens share the max_tokens budget, so a long chart can exhaust it
+# before the code is finished. A tool call moves JSON assembly to the API, which
+# emits validated structure or nothing.
+TEMPLATE_TOOL = {
+    "name": "emit_template",
+    "description": "Return the generated Plotly template and its metadata.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "plotly_code": {"type": "string",
+                            "description": "The complete Python module source for the template."},
+            "filename_suggestion": {"type": "string"},
+            "notes": {"type": "string"},
+            "caveats": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["plotly_code"],
+    },
+}
+
+
 def generate_abstract_code(image_url: str) -> TemplateOut:
     print("  - Analyzing reference image with AI...")
     image_data = base64.b64encode(fetch_bytes(image_url)).decode("utf-8")
-    response = anth.messages.create(
+    # Streamed, because the request is long enough to exceed the SDK's default
+    # non-streaming timeout: a 16k-token ceiling with thinking enabled ran past
+    # ten minutes and the SDK then retried the whole thing in silence, three
+    # times, with nothing on screen to say so.
+    with anth.messages.stream(
         model=CLAUDE_MODEL,
-        max_tokens=8192,
+        max_tokens=16384,
+        tools=[TEMPLATE_TOOL],
+        tool_choice={"type": "tool", "name": "emit_template"},
         messages=[{"role": "user", "content": [
             {"type": "text", "text": TEMPLATE_PROMPT},
             {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": image_data}},
         ]}],
-    )
-    # Current models return thinking blocks before the text block, so content[0]
-    # is not necessarily the answer. Concatenate the text blocks only.
-    raw = "".join(b.text for b in response.content if b.type == "text")
-    data = parse_json_strict(raw)
+    ) as stream:
+        response = stream.get_final_message()
+    # A truncated response is the failure this function used to report as bad
+    # JSON. Say what actually happened.
+    if response.stop_reason == "max_tokens":
+        raise ValueError(
+            f"Model hit the {16384}-token ceiling before finishing the template "
+            f"(thinking tokens share that budget). Raise max_tokens or simplify the chart.")
+    block = next((b for b in response.content if b.type == "tool_use"), None)
+    if block is None:
+        kinds = ", ".join(sorted({b.type for b in response.content})) or "nothing"
+        raise ValueError(f"Model returned {kinds}, not the expected tool call "
+                         f"(stop_reason={response.stop_reason}).")
+    data = dict(block.input)
     if "error" in data:
         raise ValueError(f"Model returned an error payload: {data['error']}")
     result = TemplateOut(**data)

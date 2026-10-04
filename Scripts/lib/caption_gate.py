@@ -85,7 +85,16 @@ class CaptionViolation(Exception):
 # A markup tag, including one carrying attributes. The attribute case matters:
 # `<span style='font-size:14px'>` must be recognised as markup, not read as
 # caption text.
-_HTML_TAG = re.compile(r"</?[a-z][a-z0-9]*(?:\s[^>]*)?/?>", re.I)
+# Markup to split on: a tag (with or without attributes) or a character entity.
+# `&#8592;` is an arrow written the long way -- as much decoration as a literal
+# one, and invisible to a stripper that only knows the literal form.
+_MARKUP = re.compile(
+    r"</?[a-z][a-z0-9]*(?:\s[^>]*)?/?>"          # <b>, </span>, <span style='...'>
+    r"|&(?:#\d+|#x[0-9a-f]+|[a-z]+);",           # &#8592;  &#x2190;  &rarr;
+    re.I)
+
+# A format field: the machinery that says how a number is printed.
+_FORMAT_FIELD = re.compile(r"\{[^{}]*\}")
 
 
 # Leading/trailing characters that are not letters or digits: arrows, bullets,
@@ -98,8 +107,10 @@ _DECORATION = re.compile(r"^[^0-9A-Za-z]+|[^0-9A-Za-z]+$")
 def _acceptable_fragment(t: str) -> bool:
     """One run of text between markup tags."""
     t = t.strip()
-    # Pure formatting/encoding tokens: no letters at all.
-    if not re.search(r"[A-Za-z]", t):
+    # Pure formatting/encoding tokens: nothing but a format specification left
+    # once the fields are removed. "{:.1f}%" states a precision, not a subject --
+    # and its letters are all inside the field, where they are syntax.
+    if not re.search(r"[A-Za-z]", _FORMAT_FIELD.sub("", t)):
         return True
     # Checked bare and with decoration stripped. Stripping only the ends cannot
     # launder a subject: "-> Texas leads" still reduces to "Texas leads".
@@ -126,7 +137,7 @@ def _acceptable(s: str) -> bool:
     Splitting does not weaken the check: every fragment still has to stand on its
     own, so one subject-specific run anywhere in the string still fails.
     """
-    parts = [p for p in (x.strip() for x in _HTML_TAG.split(s)) if p]
+    parts = [p for p in (x.strip() for x in _MARKUP.split(s)) if p]
     if not parts:
         return True                      # markup only, no words
     return all(_acceptable_fragment(p) for p in parts)
