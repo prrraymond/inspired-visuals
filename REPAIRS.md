@@ -344,6 +344,102 @@ the same kind of material the catalog was built from.
 
 ---
 
+## 2026-10-04 — MVP rebuilt on six newly-selected charts
+
+The three charts the prototype was built on were replaced with six picked from
+the refreshed catalog: a ranked bar, gains-and-losses bars, a two-part stacked
+split, a line against reference lines, diverging bars, and a highlight map.
+Stage C generated all six templates; demo data and product copy were written for
+each. All six render, and `tests/acceptance_flow.py` passes **78/78** across
+them.
+
+Generating six templates in one sitting exercised Stage C harder than the
+previous three ever had, and surfaced six defects.
+
+### The caption gate was refusing correct templates
+
+Four of six runs were refused for emitting exactly the placeholders the prompt
+asks for. Three distinct blind spots, each fixed and pinned by a test:
+
+- **Composites.** `<b>Chart title</b><br><span style='…'>Units / measure
+  description</span>` is a title and a subtitle. The tag stripper matched only
+  bare tags, so `<span style=…>` survived and read as caption text; and deleting
+  tags ran the two placeholders together into a string matching nothing. Markup
+  is split on now, and each run of text is judged on its own.
+- **Decoration.** `← Axis label` and `&#8592; Below baseline` are placeholders
+  wearing an arrow, written literally and as a character entity. Both forms are
+  recognised. Stripping only the ends cannot launder a subject: `← POORER` still
+  fails.
+- **Format fields.** `{:.1f}%` states a precision. Its only letters are inside
+  the field, where they are syntax. Fields are removed before the letters test;
+  `Arrests: {:.1f}%` still fails.
+
+`tests/test_caption_gate.py` pins 32 cases in both directions.
+
+### The vision call could not return long templates
+
+Two charts came back as unparseable JSON at different offsets — the signature of
+truncation, not bad escaping, because thinking tokens share the `max_tokens`
+budget. Stage C now has the model emit a **tool call**, so the API assembles the
+JSON, and reports a `stop_reason` of `max_tokens` as truncation rather than as a
+parse error. Raising the ceiling to 16k then pushed the request past the SDK's
+default non-streaming timeout, and it retried the whole call silently three
+times; the call is **streamed** now.
+
+### Captions were never substituted into composites
+
+`apply_captions` matched the whole annotation string against the vocabulary, so
+a composite never matched and the chart kept showing "Chart title" however it
+was captioned. The substituter now takes the string apart on markup, replaces
+each placeholder run, and puts the markup back. `figure_caption_slots` had the
+same blindness and offered one field where a composite deserves two.
+
+### Every annotation inherited the headline
+
+`PLACEHOLDER_ROLE` mapped `"annotation text"` to `"title"`, so a template
+carrying several generic annotation placeholders had its reference-line labels
+and its call-out all replaced by the chart's title — four copies of the headline
+on one chart. Generic annotations are no longer given the title; an unfilled one
+stays visible as the empty slot it is.
+
+### Numbered column placeholders were invisible
+
+A template with two value columns names them `value_column_1` and
+`value_column_2`. `read_interface` matched only names ending exactly in
+`_column`, so both were read as constants: never mapped to the user's columns,
+silently keeping their defaults.
+
+### Two generated templates carried defects
+
+`CHT-BC77C6` shipped `annotations_font=None if False else None` — dead code that
+is also invalid, since `annotations` is an array property that cannot take the
+magic-underscore form. It raised on every render. `CHT-ABA629` placed its
+subtitle level with its title and the two overlapped. Both fixed, re-verified
+against the caption gate, and pushed to storage and Notion so the stored
+template matches what the gallery runs — the local cache is refreshed from
+storage at startup, so an unpushed fix would have been silently overwritten.
+
+### The acceptance harness was testing the wrong things
+
+Four of its assumptions broke on a six-chart library, and each would have hidden
+a real regression: it hardcoded three previews; it compared a title for equality
+where a composite only contains it; it read trace `y` only, so a horizontal bar
+chart's values could change without the signature moving; and it asserted the
+raw dtype appears in developer view on entries that have no contract to show.
+The expected column name for a bad paste is per-chart now rather than always
+`value`.
+
+### Known gap, not fixed
+
+`CHT-3389CA` carries a call-out built from two generic annotation placeholders.
+With the title no longer flooding them they read "Annotation text" twice. They
+are honest unfilled slots, but there is no field for them: one caption role
+cannot serve several annotations that need different words. A template carrying
+repeated generic annotations needs per-annotation fields, which the catalog's
+`constants` mechanism can set but the workspace cannot yet edit.
+
+---
+
 ## 2026-10-03 (resolved) — config repointed to the current project
 
 All four variables now name `tnzqhmecjcdgfoemhfdq`, and it is verified end to

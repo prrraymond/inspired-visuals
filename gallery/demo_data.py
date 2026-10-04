@@ -17,25 +17,7 @@ from __future__ import annotations
 import pandas as pd
 
 # --------------------------------------------------------------------------- #
-# 1. Before/after trend  (CHT-678195)
-# --------------------------------------------------------------------------- #
-_TREND_VALUES = [
-    818_000, 843_000, 861_000, 872_000, 858_000, 889_000,
-    905_000, 918_000, 944_000, 971_000, 1_002_000, 1_046_000,
-    612_000, 588_000, 631_000, 668_000, 702_000, 744_000,
-    771_000, 803_000, 828_000, 869_000, 901_000, 938_000,
-]
-
-
-def _trend() -> pd.DataFrame:
-    return pd.DataFrame({
-        "month": pd.date_range("2023-01-01", periods=len(_TREND_VALUES), freq="MS"),
-        "value": _TREND_VALUES,
-    })
-
-
-# --------------------------------------------------------------------------- #
-# 2. State comparison map  (CHT-6FBD47)
+# Shared: U.S. state geography, for any map template.
 # --------------------------------------------------------------------------- #
 # Approximate label anchors. Real geography, because the chart is a real map.
 _STATES = [
@@ -72,43 +54,91 @@ _STATES = [
 _LABELLED = {"CA", "TX", "FL", "NY", "IL", "WA"}
 
 
-def _states() -> pd.DataFrame:
-    return pd.DataFrame({
-        "state":      [s[0] for s in _STATES],
-        "label":      [s[1] for s in _STATES],
-        "value":      [s[4] for s in _STATES],
-        "lat":        [s[2] for s in _STATES],
-        "lon":        [s[3] for s in _STATES],
-        "show_label": [s[0] in _LABELLED for s in _STATES],
-    })
-
-
-# --------------------------------------------------------------------------- #
-# 3. Small-multiple comparison  (CHT-85FB02)
-# --------------------------------------------------------------------------- #
-_GROUPS = {
-    "Group A": [112, 118, 121, 115, 108,  96,  88,  93, 101, 107, 110],
-    "Group B": [ 94,  91,  87,  92,  99, 104, 111, 118, 124, 121, 116],
-    "Group C": [103, 106, 109, 113, 117, 119, 122, 126, 129, 131, 134],
-    "Group D": [131, 127, 122, 118, 112, 106,  99,  94,  89,  85,  82],
-    "Group E": [ 97, 101,  96, 102,  98, 105,  99, 103,  96, 100,  95],
-    "Group F": [ 86,  89,  95, 104, 115, 123, 118, 109,  97,  91,  88],
-}
-_YEARS = list(range(2014, 2025))
-
-
-def _multiples() -> pd.DataFrame:
+def _highlight_map() -> pd.DataFrame:
+    """Which states meet a condition. Two categories, plus labels for a few."""
     rows = []
-    for group, series in _GROUPS.items():
-        for year, value in zip(_YEARS, series):
-            rows.append({"group": group, "year": year, "value": value})
+    for code, label, lat, lon, value in _STATES:
+        rows.append({
+            "state_code": code,
+            "category": "Above threshold" if value >= 25 else "Below threshold",
+            "label": label if code in _LABELLED else None,
+            "lat": lat,
+            "lon": lon,
+        })
     return pd.DataFrame(rows)
 
 
+# --------------------------------------------------------------------------- #
+# Ranked bars  (CHT-77B304)
+# --------------------------------------------------------------------------- #
+# Ordered groups with a measure that climbs steeply at the top -- the shape these
+# charts exist to show, without which the form looks like any other bar chart.
+_RANKED = [("Group A", 2.4), ("Group B", 3.1), ("Group C", 4.6), ("Group D", 6.8),
+           ("Group E", 16.2), ("Group F", 29.4), ("Group G", 38.0)]
+
+
+def _ranked() -> pd.DataFrame:
+    return pd.DataFrame(_RANKED, columns=["group", "value"])
+
+
+# --------------------------------------------------------------------------- #
+# Gain/loss bars  (CHT-BC77C6)
+# --------------------------------------------------------------------------- #
+# Crosses zero, so the template's two-sided colouring and its label placement
+# both have something to do.
+_GAINLOSS = [("Group A", -3.9), ("Group B", -1.2), ("Group C", -0.4), ("Group D", 0.1),
+             ("Group E", 0.5), ("Group F", 0.8), ("Group G", 1.1), ("Group H", 1.3),
+             ("Group I", 1.5), ("Group J", 2.3)]
+
+
+def _gainloss() -> pd.DataFrame:
+    return pd.DataFrame(_GAINLOSS, columns=["group", "change"])
+
+
+# --------------------------------------------------------------------------- #
+# Two-part split  (CHT-26F750)
+# --------------------------------------------------------------------------- #
+# Each row sums to 100: the template draws shares, and a row that does not add up
+# would silently misdraw rather than fail.
+_SPLIT = [("All", 83, 17), ("Group A", 90, 10), ("Group B", 84, 16), ("Group C", 74, 26)]
+
+
+def _split() -> pd.DataFrame:
+    return pd.DataFrame(_SPLIT, columns=["group", "share_first", "share_second"])
+
+
+# --------------------------------------------------------------------------- #
+# Line against a baseline  (CHT-3389CA)
+# --------------------------------------------------------------------------- #
+# x spans the template's tick values (10 to 99.9) and y sits either side of 1.0,
+# so the reference lines land inside the data rather than off the top.
+_BASELINE = [(10, 1.05), (20, 1.18), (30, 1.12), (40, 1.14), (50, 1.06), (60, 1.02),
+             (70, 0.96), (75, 0.88), (80, 0.90), (85, 0.86), (90, 0.93), (95, 1.02),
+             (97, 1.12), (99, 1.35), (99.5, 1.60), (99.9, 2.20)]
+
+
+def _baseline() -> pd.DataFrame:
+    return pd.DataFrame(_BASELINE, columns=["position", "ratio"])
+
+
+# --------------------------------------------------------------------------- #
+# Diverging bars  (CHT-ABA629)
+# --------------------------------------------------------------------------- #
+_DIVERGING = [("Statement A", 14), ("Statement B", 6),
+              ("Statement C", -12), ("Statement D", -18)]
+
+
+def _diverging() -> pd.DataFrame:
+    return pd.DataFrame(_DIVERGING, columns=["statement", "net"])
+
+
 BUILDERS = {
-    "CHT-678195": _trend,
-    "CHT-6FBD47": _states,
-    "CHT-85FB02": _multiples,
+    "CHT-77B304": _ranked,
+    "CHT-BC77C6": _gainloss,
+    "CHT-26F750": _split,
+    "CHT-3389CA": _baseline,
+    "CHT-ABA629": _diverging,
+    "CHT-2AAEE9": _highlight_map,
 }
 
 

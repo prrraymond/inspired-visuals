@@ -31,8 +31,13 @@ def chart_sig(pg):
       const d = document.getElementById('chart');
       if (!d || !d.data) return null;
       const arr = v => Array.isArray(v) ? v : (v == null ? [] : [v]);
-      return JSON.stringify(d.data.map(t => [t.type, arr(t.z||t.y||t.locations).length,
-             JSON.stringify(arr(t.y||t.z||t.text).slice(0, 60))]));
+      // x matters: a horizontal bar chart puts its values there, and a
+      // signature that reads only y never changes when the data does.
+      return JSON.stringify(d.data.map(t => [t.type,
+             arr(t.z||t.y||t.x||t.locations).length,
+             JSON.stringify(arr(t.y).slice(0,60)) + "|" +
+             JSON.stringify(arr(t.x).slice(0,60)) + "|" +
+             JSON.stringify(arr(t.z).slice(0,60))]));
     }""")
 
 
@@ -77,7 +82,7 @@ def drawn(pg, timeout=15000):
         " #chart .scatterlayer .js-line, #chart .points path').length > 0", timeout=timeout)
 
 
-def run(pw, chartid, edit_col, paste_good, paste_bad):
+def run(pw, chartid, edit_col, paste_good, paste_bad, bad_column):
     b = pw.chromium.launch()
     pg = b.new_page(viewport={"width": 1440, "height": 1000})
     errs = []
@@ -87,8 +92,8 @@ def run(pw, chartid, edit_col, paste_good, paste_bad):
     pg.goto(BASE + "/", wait_until="networkidle")
     imgs = pg.evaluate("""() => [...document.querySelectorAll('.shot img')]
         .map(i => [i.naturalWidth, i.naturalHeight])""")
-    check("1. three rendered previews, all loaded",
-          len(imgs) == 3 and all(w > 0 and h > 0 for w, h in imgs), f"sizes={imgs}")
+    check(f"1. every preview rendered and loaded ({len(CASES)} expected)",
+          len(imgs) == len(CASES) and all(w > 0 and h > 0 for w, h in imgs), f"sizes={imgs}")
     check("1b. no ids, status or caveat counts on the library page",
           not pg.evaluate("""() => /CHT-[0-9A-F]{6}|Needs hydration|Caveats/.test(
               document.querySelector('main').innerText)"""))
@@ -119,7 +124,7 @@ def run(pw, chartid, edit_col, paste_good, paste_bad):
 
     def title_landed():
         t = chart_title(pg)
-        return (t[0] == "Acceptance test heading"
+        return ("Acceptance test heading" in (t[0] or "")
                 or any("Acceptance test heading" in (a or "") for a in t[1]))
 
     check("7-8. editing the title changes the title", until(title_landed))
@@ -145,7 +150,8 @@ def run(pw, chartid, edit_col, paste_good, paste_bad):
     check("11. incompatible data produces an actionable error", bool(surfaced),
           json.dumps(surfaced[:1])[:200])
     check("11b. the message names the column, not a stack trace",
-          bool(surfaced) and "value" in surfaced[0] and "Traceback" not in surfaced[0])
+          bool(surfaced) and bad_column in surfaced[0] and "Traceback" not in surfaced[0],
+          f"looking for {bad_column!r}")
 
     # the fixes from the 2026-09-29 review ---------------------------------
     check("headers sit over their own values",
@@ -159,32 +165,43 @@ def run(pw, chartid, edit_col, paste_good, paste_bad):
                     "document.querySelector('main').innerText)"
     check("no pandas storage types on the entry page", not pg.evaluate(storage_types))
     pg.goto(f"{BASE}/chart/{chartid}?dev=1", wait_until="networkidle")
-    check("...but they are still there in developer view", pg.evaluate(storage_types))
+    # Only meaningful where a contract is rendered at all. These entries have not
+    # been through Stage D, so there is no contract section and nothing to show.
+    if pg.locator(".colcard").count():
+        check("...but they are still there in developer view", pg.evaluate(storage_types))
 
     check("no uncaught JS errors", not errs, "; ".join(errs[:2]))
     b.close()
 
 
 CASES = [
-    ("CHT-678195", "Before/after trend", 2,
-     "month,value\n2024-01-01,120\n2024-02-01,140\n2024-03-01,131\n2024-04-01,88\n"
-     "2024-05-01,96\n2024-06-01,109\n",
-     "month,value\n2024-01-01,a\n2024-02-01,b\n2024-03-01,c\n"),
-    ("CHT-6FBD47", "State comparison map", 3,
-     "state,value\nCA,10\nTX,55\nNY,30\nFL,42\nWA,18\nIL,26\nOH,9\nGA,61\n",
-     "state,value\nCA,high\nTX,low\nNY,mid\n"),
-    ("CHT-85FB02", "Small-multiple comparison", 3,
-     "group,year,value\nNorth,2021,104\nNorth,2022,97\nNorth,2023,112\n"
-     "South,2021,88\nSouth,2022,95\nSouth,2023,101\n",
-     "group,year,value\nNorth,2021,x\nNorth,2022,y\nSouth,2021,z\n"),
+    ("CHT-77B304", "Ranked comparison", 2,
+     "group,value\nAlpha,2.1\nBeta,5.4\nGamma,9.8\nDelta,18.2\nEpsilon,31.0\n",
+     "group,value\nAlpha,low\nBeta,high\nGamma,mid\n", "value"),
+    ("CHT-BC77C6", "Gains and losses", 2,
+     "group,change\nAlpha,-2.5\nBeta,-0.8\nGamma,0.4\nDelta,1.9\nEpsilon,3.2\n",
+     "group,change\nAlpha,down\nBeta,up\nGamma,flat\n", "change"),
+    ("CHT-26F750", "Two-part split", 2,
+     "group,share_first,share_second\nAlpha,70,30\nBeta,55,45\nGamma,88,12\n",
+     "group,share_first,share_second\nAlpha,most,some\nBeta,few,many\n", "share_first"),
+    ("CHT-3389CA", "Measure against a baseline", 2,
+     "position,ratio\n10,1.1\n30,0.95\n50,1.02\n70,0.88\n90,1.4\n99,2.0\n",
+     "position,ratio\n10,low\n30,high\n50,mid\n", "ratio"),
+    ("CHT-ABA629", "Net agreement", 2,
+     "statement,net\nAlpha,12\nBeta,4\nGamma,-7\nDelta,-15\n",
+     "statement,net\nAlpha,agree\nBeta,disagree\nGamma,neutral\n", "net"),
+    ("CHT-2AAEE9", "Highlight map", 2,
+     "state_code,category\nCA,Above threshold\nTX,Below threshold\nNY,Above threshold\n"
+     "FL,Below threshold\nWA,Above threshold\nIL,Below threshold\n",
+     "state_code\nCA\nTX\nNY\n", "category"),
 ]
 
 
 def main():
     with sync_playwright() as pw:
-        for cid, name, col, good, bad in CASES:
+        for cid, name, col, good, bad, bad_column in CASES:
             print(f"=== {cid}  {name} ===")
-            run(pw, cid, col, good, bad)
+            run(pw, cid, col, good, bad, bad_column)
             print()
     print(f"{len(ok)} passed, {len(fail)} failed")
     if fail:

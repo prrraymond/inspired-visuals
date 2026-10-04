@@ -19,72 +19,105 @@ library page.
 from __future__ import annotations
 
 CATALOG: dict[str, dict] = {
-    "CHT-678195": {
-        "name": "Before/after trend",
-        "form": "Line chart",
-        "job": "Show how a measure changes over time around an important breakpoint.",
-        "traits": ["Over time", "One measure", "Two regimes"],
-        "needs": "One row per time period — a date and a number.",
-        # Demo mapping: template role -> demo column. Explicit, so the demo path
-        # never has to guess and never shows a mapping screen.
-        "mapping": {"x_column": "month", "y_column": "value"},
+    "CHT-77B304": {
+        "name": "Ranked comparison",
+        "form": "Bar chart",
+        "job": "Show how a measure climbs or falls across groups that have a "
+               "natural order.",
+        "traits": ["Ordered groups", "One measure", "Ends called out"],
+        "needs": "One row per group — a group name and a number.",
+        "mapping": {"x_column": "group", "y_column": "value"},
         "measure": "value",
         "derive": {},
-        "captions": {"title": "Monthly total", "subtitle": "Sample data"},
-        # The two shaded bands are the whole point of this chart, and where they
-        # meet was decided by a rule nobody could see. It is a control now.
-        "controls": [
-            {"const": "SPLIT_X", "label": "Breakpoint", "kind": "date",
-             "column": "month", "auto": "midpoint",
-             "help": "The shaded bands change here — everything before it is one "
-                     "regime, everything after it the other."},
-        ],
-    },
-    "CHT-6FBD47": {
-        "name": "State comparison map",
-        "form": "Choropleth map",
-        "job": "Show how a measure varies geographically across U.S. states, "
-               "grouped into value ranges.",
-        "traits": ["U.S. states", "Value ranges", "Labelled highlights"],
-        "needs": "One row per state — a two-letter state code and a number.",
-        "mapping": {
-            "state_column": "state", "value_column": "value",
-            "label_column": "label", "lat_column": "lat", "lon_column": "lon",
-            "label_flag_column": "show_label",
-        },
-        "measure": "value",
-        # `category` is not a column the user supplies: it is the PRODUCT of the
-        # value ranges. Deriving it is what makes the map categorical.
-        "derive": {"category": "value"},
-        "captions": {"title": "Measure by state", "source": "Sample data"},
+        "captions": {"title": "Measure by group", "source": "Sample data"},
         "controls": [],
     },
-    "CHT-85FB02": {
-        "name": "Small-multiple comparison",
-        "form": "Faceted bar chart",
-        "job": "Compare movement above and below a baseline across several groups "
-               "over time.",
-        "traits": ["Several groups", "Over time", "Above/below a baseline"],
-        "needs": "One row per group and period — a group name, a period and a number.",
-        "mapping": {"facet_column": "group", "x_column": "year", "y_column": "value"},
-        "measure": "value",
+    "CHT-BC77C6": {
+        "name": "Gains and losses",
+        "form": "Bar chart around zero",
+        "job": "Show which groups gained and which lost, across groups that have "
+               "a natural order.",
+        "traits": ["Above/below zero", "Ordered groups", "Every bar labelled"],
+        "needs": "One row per group — a group name and a number that may be "
+                 "negative.",
+        "mapping": {"x_column": "group", "y_column": "change"},
+        "measure": "change",
         "derive": {},
-        # `above` / `below` are left unset: the template's own canonical
-        # placeholders already say exactly that, and repeating them here would be
-        # two places to change one word.
-        "captions": {"title": "Measure by group, 2014–2024", "units": "Index",
-                     "source": "Sample data"},
-        "controls": [
-            {"const": "GRID_STEP", "label": "Gridline step", "kind": "number",
-             "auto": "computed",
-             "help": "The dotted line sits this far above the baseline, so panels "
-                     "can be compared by eye."},
-        ],
+        "captions": {"title": "Change by group", "source": "Sample data"},
+        "controls": [],
+    },
+    "CHT-26F750": {
+        "name": "Two-part split",
+        "form": "Stacked bar",
+        "job": "Compare how a two-way split differs between groups.",
+        "traits": ["Two parts", "Several groups", "Shares of 100"],
+        "needs": "One row per group — a group name and two numbers that add up "
+                 "to 100.",
+        "mapping": {"category_column": "group",
+                    "value_column_1": "share_first",
+                    "value_column_2": "share_second"},
+        "measure": "share_first",
+        "derive": {},
+        "captions": {"title": "Split by group", "source": "Sample data"},
+        "controls": [],
+    },
+    "CHT-3389CA": {
+        "name": "Measure against a baseline",
+        "form": "Line chart",
+        "job": "Show how a measure moves above and below a reference level "
+               "across an ordered range.",
+        "traits": ["Reference lines", "Ordered range", "Endpoint called out"],
+        "needs": "One row per position — a position along the range and a number.",
+        "mapping": {"x_column": "position", "y_column": "ratio"},
+        "measure": "ratio",
+        "derive": {},
+        "captions": {"title": "Measure against the baseline", "source": "Sample data"},
+        # The template ships three reference lines all labelled with the same
+        # generic placeholder. Naming them is what makes the form readable.
+        "constants": {"REFERENCE_LINES": [(2.0, "Upper reference", False),
+                                          (1.0, "Baseline", True),
+                                          (0.5, "Lower reference", False)]},
+        "controls": [],
+    },
+    "CHT-ABA629": {
+        "name": "Net agreement",
+        "form": "Diverging bar chart",
+        "job": "Compare how far several statements land on one side or the other "
+               "of neutral.",
+        "traits": ["Two directions", "Labelled statements", "Diverges from zero"],
+        "needs": "One row per statement — the statement and a number that may be "
+                 "negative.",
+        "mapping": {"label_column": "statement", "value_column": "net"},
+        "measure": "net",
+        "derive": {},
+        "captions": {"title": "Net position by statement", "source": "Sample data"},
+        "controls": [],
+    },
+    "CHT-2AAEE9": {
+        "name": "Highlight map",
+        "form": "Choropleth map",
+        "job": "Show which U.S. states fall into each of a few groups.",
+        "traits": ["U.S. states", "A few groups", "Labelled states"],
+        "needs": "One row per state — a two-letter state code and the group it "
+                 "belongs to.",
+        "mapping": {"location_column": "state_code", "category_column": "category",
+                    "label_column": "label", "lat_column": "lat", "lon_column": "lon"},
+        # The category is a column the user supplies here, not something derived
+        # from the numbers, so there is no measure and nothing to bin.
+        "measure": None,
+        "derive": {},
+        "captions": {"title": "States by group", "source": "Sample data"},
+        # Order fixes which group gets the accent colour. Left to first-appearance
+        # in the data it was whichever state happened to sort first, so the
+        # highlighted group was the one below the threshold.
+        "constants": {"category_order": ["Above threshold", "Below threshold"]},
+        "controls": [],
     },
 }
 
-# Display order on the library page. Simplest form first.
-ORDER = ["CHT-678195", "CHT-6FBD47", "CHT-85FB02"]
+# Display order on the library page: simplest form first, map last.
+ORDER = ["CHT-77B304", "CHT-BC77C6", "CHT-26F750",
+         "CHT-3389CA", "CHT-ABA629", "CHT-2AAEE9"]
 
 
 def entry(chartid: str) -> dict | None:

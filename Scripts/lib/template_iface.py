@@ -20,9 +20,9 @@ import re
 from typing import Any, Optional
 
 try:
-    from caption_gate import CANONICAL, find_captions
+    from caption_gate import CANONICAL, MARKUP, find_captions
 except ImportError:                                    # pragma: no cover
-    from .caption_gate import CANONICAL, find_captions  # type: ignore
+    from .caption_gate import CANONICAL, MARKUP, find_captions  # type: ignore
 
 
 # --- caption roles -------------------------------------------------------- #
@@ -47,7 +47,10 @@ PLACEHOLDER_ROLE = {
     "source / credit": "source",
     "source line": "source",
     "source: example source": "source",
-    "annotation text": "title",
+    # NOT mapped to "title": a template may carry several generic annotation
+    # placeholders, and giving them all the title turned every reference-line
+    # label and call-out on a chart into a copy of the headline. An unfilled
+    # annotation stays visible as the empty slot it is.
     "above baseline": "above",
     "below baseline": "below",
 }
@@ -147,6 +150,11 @@ def caption_constants(constants: dict) -> dict[str, str]:
 
 
 # --- applying captions ---------------------------------------------------- #
+# Markup kept as its own group, so a string can be taken apart and put back
+# together with only its placeholder runs replaced.
+_MARKUP_KEEP = re.compile(f"({MARKUP.pattern})", MARKUP.flags)
+
+
 def _replace(text: Optional[str], captions: dict) -> Optional[str]:
     """
     The user's words for this slot, or None to leave the placeholder alone.
@@ -154,14 +162,36 @@ def _replace(text: Optional[str], captions: dict) -> Optional[str]:
     An unfilled caption LEAVES the placeholder standing rather than blanking it.
     A visible "Source / credit" is an empty slot the reader can see and fill; a
     blank is indistinguishable from a chart that never had one.
+
+    A caption may COMPOSE several placeholders into one annotation --
+    `<b>Chart title</b><br><span style='...'>Units / measure description</span>`
+    is a title and a subtitle drawn together. Matching the whole string against
+    the vocabulary missed those entirely, so the template kept showing "Chart
+    title" however the user captioned it. Each run between tags is substituted
+    on its own and the markup is put back untouched.
     """
     if not isinstance(text, str):
         return None
+
     role = PLACEHOLDER_ROLE.get(text.strip().lower())
-    if role is None:
-        return None
-    word = (captions.get(role) or "").strip()
-    return word or None
+    if role is not None:                      # the whole string is one placeholder
+        word = (captions.get(role) or "").strip()
+        return word or None
+
+    parts, changed = _MARKUP_KEEP.split(text), False
+    out = []
+    for part in parts:
+        if not part or _MARKUP_KEEP.fullmatch(part):
+            out.append(part or "")
+            continue
+        part_role = PLACEHOLDER_ROLE.get(part.strip().lower())
+        word = (captions.get(part_role) or "").strip() if part_role else ""
+        if word:
+            out.append(part.replace(part.strip(), word))
+            changed = True
+        else:
+            out.append(part)
+    return "".join(out) if changed else None
 
 
 def apply_captions(fig, captions: dict, satisfied: Optional[set] = None) -> list[str]:
@@ -226,8 +256,13 @@ def figure_caption_slots(fig) -> set:
     lay = fig.layout
 
     def note(text):
-        if isinstance(text, str):
-            role = PLACEHOLDER_ROLE.get(text.strip().lower())
+        # Every placeholder in the string, not just a string that IS one: a
+        # composite annotation carries a title and a subtitle, and both deserve
+        # a field. Offering only one left the other impossible to edit.
+        if not isinstance(text, str):
+            return
+        for part in [text] + _MARKUP_KEEP.split(text):
+            role = PLACEHOLDER_ROLE.get(part.strip().lower()) if part else None
             if role:
                 found.add(role)
 

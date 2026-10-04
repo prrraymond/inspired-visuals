@@ -88,10 +88,11 @@ class CaptionViolation(Exception):
 # Markup to split on: a tag (with or without attributes) or a character entity.
 # `&#8592;` is an arrow written the long way -- as much decoration as a literal
 # one, and invisible to a stripper that only knows the literal form.
-_MARKUP = re.compile(
+MARKUP = re.compile(
     r"</?[a-z][a-z0-9]*(?:\s[^>]*)?/?>"          # <b>, </span>, <span style='...'>
     r"|&(?:#\d+|#x[0-9a-f]+|[a-z]+);",           # &#8592;  &#x2190;  &rarr;
     re.I)
+_MARKUP = MARKUP                                 # internal alias, kept for clarity
 
 # A format field: the machinery that says how a number is printed.
 _FORMAT_FIELD = re.compile(r"\{[^{}]*\}")

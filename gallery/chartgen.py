@@ -126,6 +126,10 @@ def build(chartid: str, template_src: str, df: pd.DataFrame, *,
     mapping["_derive"] = dict(spec.get("derive") or {})
 
     constants, described = resolve_controls(chartid, df, settings)
+    # Constants the catalog pins for this chart: values a template exposes that
+    # are neither data nor user-editable, such as the labels on a reference line.
+    # Applied first, so an actual control still wins.
+    constants = {**(spec.get("constants") or {}), **constants}
     result = _render(template_src, df, contract, mapping, proposals,
                      {**(spec.get("captions") or {}), **(captions or {})},
                      formats=formats, constants=constants,
