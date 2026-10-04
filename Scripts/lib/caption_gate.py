@@ -82,16 +82,44 @@ class CaptionViolation(Exception):
             f"{len(findings)} subject-specific caption(s) in generated code:\n  - {lines}")
 
 
-def _acceptable(s: str) -> bool:
-    t = re.sub(r"</?[a-z]+\s*/?>", "", s, flags=re.I).strip()   # drop markup tags
+# A markup tag, including one carrying attributes. The attribute case matters:
+# `<span style='font-size:14px'>` must be recognised as markup, not read as
+# caption text.
+_HTML_TAG = re.compile(r"</?[a-z][a-z0-9]*(?:\s[^>]*)?/?>", re.I)
+
+
+def _acceptable_fragment(t: str) -> bool:
+    """One run of text between markup tags."""
+    t = t.strip()
     if t.lower() in _ACCEPTED_EXACT:
         return True
     if any(p.match(t) for p in _ACCEPTED_PATTERNS):
         return True
-    # Pure formatting/encoding tokens: no letters, or a single word with no space.
+    # Pure formatting/encoding tokens: no letters at all.
     if not re.search(r"[A-Za-z]", t):
         return True
     return False
+
+
+def _acceptable(s: str) -> bool:
+    """
+    True when a caption-position string asserts no subject.
+
+    Markup is SPLIT ON rather than deleted, because a caption may legitimately
+    COMPOSE several canonical placeholders into one annotation --
+    `<b>Chart title</b><br><span style='...'>Units / measure description</span>`
+    is a title, a line break and a subtitle, none of which name a subject.
+    Deleting the tags instead ran the two placeholders together into a string
+    that matched nothing, so a correctly-written template was refused; and a tag
+    carrying attributes survived deletion entirely and was read as caption text.
+
+    Splitting does not weaken the check: every fragment still has to stand on its
+    own, so one subject-specific run anywhere in the string still fails.
+    """
+    parts = [p for p in (x.strip() for x in _HTML_TAG.split(s)) if p]
+    if not parts:
+        return True                      # markup only, no words
+    return all(_acceptable_fragment(p) for p in parts)
 
 
 def find_captions(code: str) -> list[dict]:
