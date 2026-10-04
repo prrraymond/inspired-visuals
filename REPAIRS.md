@@ -174,6 +174,33 @@ mid-run is otherwise indistinguishable from "still running".
 where it left off; existing rows are never duplicated. The final tally is
 recorded below when the run ends.
 
+### Final tally
+
+First pass: `created=736 skipped_existing=7 failed=3` (the 7 were from the
+initial buffered-stdout attempt, restarted; see above). All 3 failures were
+transient network errors (two download timeouts, one Notion connection error),
+none a defect in an image or the code.
+
+A second pass, scoped to only what Notion did not yet have, retried the 3 and
+succeeded on all of them — then hit its own transient Notion timeout
+mid-scan on an already-written row and stopped. That stop is the duplicate-check
+hardening doing its job: rather than treat the timeout as "row does not exist"
+and risk writing a second page, it raised and halted. No further run was
+needed; the three target images were already written before the timeout hit.
+
+**Verified directly against Notion, not against the log:**
+
+| Check | Result |
+|---|---|
+| Live rows | **746** |
+| Distinct chart IDs | **746** (zero duplicates) |
+| Distinct source filenames referenced | **746** |
+| All three originally-failed chart IDs | present, `1. Intake` |
+
+Every one of the 746 unique screenshots on disk now has exactly one row in
+`Viz library`, status `1. Intake`, image and thumbnail serving. The catalog is
+ready for visual triage in Notion.
+
 ---
 
 ## 2026-10-03 — old catalog archived; Stage A proven on two rows; full run started
