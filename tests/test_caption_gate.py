@@ -27,6 +27,9 @@ MUST_PASS = [
     ('empty / markup only',      'fig.add_annotation(text="<br>")'),
     ('numeric only',             'fig.add_annotation(text="+1.5%")'),
     ('hovertemplate token',      'go.Bar(hovertemplate="%{x}")'),
+    ('arrow before placeholder', 'fig.add_annotation(text="\u2190 Axis label")'),
+    ('arrow after placeholder',  'fig.add_annotation(text="Axis label \u2192")'),
+    ('bulleted placeholder',     'fig.add_annotation(text="\u2022 Category A")'),
     ('column identifier',        'label_flag_column = "show_label"'),
     ('encoding, not caption',    'go.Choropleth(locationmode="USA-states")'),
 ]
@@ -40,6 +43,8 @@ MUST_FLAG = [
     ('subject axis title',       'fig.update_layout(yaxis_title="Household income")'),
     ('named constant',           'POS_LABEL = "PROFIT"'),
     ('subject in dict',          'dict(text="Admissions rate at elite colleges")'),
+    ('arrow cannot launder',     'fig.add_annotation(text="\u2190 POORER")'),
+    ('arrow + subject',          'fig.add_annotation(text="Texas leads \u2192")'),
 ]
 
 

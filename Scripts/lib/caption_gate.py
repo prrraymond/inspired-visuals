@@ -88,16 +88,26 @@ class CaptionViolation(Exception):
 _HTML_TAG = re.compile(r"</?[a-z][a-z0-9]*(?:\s[^>]*)?/?>", re.I)
 
 
+# Leading/trailing characters that are not letters or digits: arrows, bullets,
+# dashes, colons, brackets. They decorate a caption without saying anything about
+# its subject, so "<- Axis label" is the Axis label placeholder with an arrow on
+# it, not a claim about the data.
+_DECORATION = re.compile(r"^[^0-9A-Za-z]+|[^0-9A-Za-z]+$")
+
+
 def _acceptable_fragment(t: str) -> bool:
     """One run of text between markup tags."""
     t = t.strip()
-    if t.lower() in _ACCEPTED_EXACT:
-        return True
-    if any(p.match(t) for p in _ACCEPTED_PATTERNS):
-        return True
     # Pure formatting/encoding tokens: no letters at all.
     if not re.search(r"[A-Za-z]", t):
         return True
+    # Checked bare and with decoration stripped. Stripping only the ends cannot
+    # launder a subject: "-> Texas leads" still reduces to "Texas leads".
+    for candidate in (t, _DECORATION.sub("", t)):
+        if candidate.lower() in _ACCEPTED_EXACT:
+            return True
+        if any(p.match(candidate) for p in _ACCEPTED_PATTERNS):
+            return True
     return False
 
 
