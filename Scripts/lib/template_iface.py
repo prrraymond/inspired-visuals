@@ -58,12 +58,25 @@ DEFAULT_CAPTIONS = {
 }
 
 
+# A column placeholder is `<role>_column`, optionally numbered: a template with
+# two value columns names them `value_column_1` and `value_column_2`. Without the
+# numbered form those were read as ordinary constants, so they were never mapped
+# to the user's columns and silently kept their defaults.
+COLUMN_VAR = re.compile(r"^(?P<role>.+?)_column(?P<n>_?\d+)?$")
+
+
 class Placeholder:
     """One `<role>_column` slot a template reads from the dataframe."""
 
     def __init__(self, var: str, default: str, comment: str, optional: bool):
-        self.var = var                        # e.g. "state_column"
-        self.role = var[:-7] if var.endswith("_column") else var
+        self.var = var                        # e.g. "state_column", "value_column_1"
+        m = COLUMN_VAR.match(var)
+        if m:
+            # "value_column_1" -> role "value_1", so a numbered pair stays distinct.
+            suffix = (m.group("n") or "").lstrip("_")
+            self.role = f"{m.group('role')}_{suffix}" if suffix else m.group("role")
+        else:
+            self.role = var
         self.default = default                # e.g. "state_code"
         self.comment = comment
         self.optional = optional
@@ -114,7 +127,7 @@ def read_interface(src: str) -> dict:
         m = re.search(r"#\s*(.*)$", lines[node.lineno - 1] if node.lineno <= len(lines) else "")
         if m:
             comment = m.group(1).strip()
-        if name.endswith("_column") and isinstance(value, str):
+        if COLUMN_VAR.match(name) and isinstance(value, str):
             optional = name in guarded or "optional" in comment.lower()
             placeholders.append(Placeholder(name, value, comment, optional))
         else:
