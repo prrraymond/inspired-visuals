@@ -1,0 +1,13 @@
+# Runtime only. The build-time tools -- kaleido for PNG export, the Notion and
+# Supabase clients, the Anthropic SDK -- are deliberately absent: a deployment
+# serves gallery/bundle/ and never reaches for them.
+#
+# requests and python-dotenv are here because library.py imports them at module
+# load. A bundled deployment never calls into it, but the import still has to
+# resolve.
+Flask==3.0.3
+pandas==2.1.4
+plotly==6.0.1
+numpy==1.26.4
+requests==2.32.3
+python-dotenv==1.0.1

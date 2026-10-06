@@ -1,0 +1,97 @@
+{
+ "CHT-26F750": {
+  "caveats": [
+   "horizontal bar orientation",
+   "stacked bars forming a 100% (percent-stacked) layout",
+   "two-segment share encoding with fixed 0-100 x range",
+   "reversed y-axis order so the first data row appears on top",
+   "hidden x-axis (no ticks, grid, or axis title)",
+   "data labels drawn inside bars with start/end inside-text anchoring",
+   "unit suffix applied only to the first row's label",
+   "legend suppressed and replaced by annotation-based column headers",
+   "annotation-based source/credit line"
+  ],
+  "status": "3. Needs hydration",
+  "title": "Should it be illegal for employees to be fired based on sexual orientation?",
+  "viz_types": [
+   "Horizontal Stacked Bar Chart"
+  ]
+ },
+ "CHT-2AAEE9": {
+  "caveats": [
+   "choropleth map (USA-states locationmode, Albers USA projection)",
+   "discrete/categorical colour encoding via one trace per category instead of a continuous colorbar",
+   "colorbar suppressed (showscale=False)",
+   "custom categorical ordering controls legend and palette assignment",
+   "direct on-map text labels via an overlaid Scattergeo text trace",
+   "horizontal legend anchored above the plot area",
+   "annotation-dependent (explanatory note and source/credit placed with paper-referenced annotations)",
+   "unmapped regions rely on the base land colour rather than a data trace"
+  ],
+  "status": "3. Needs hydration",
+  "title": "Where non-Biden vote share has exceeded 10 percent in Democratic primaries so far",
+  "viz_types": [
+   "Choropleth Map"
+  ]
+ },
+ "CHT-3389CA": {
+  "caveats": [
+   "single line-with-markers series",
+   "annotation-dependent (inline reference-line labels and an end-point call-out)",
+   "horizontal reference lines including a primary baseline at the ratio value 1",
+   "ratio/index y encoding with hidden y tick labels",
+   "custom categorical x tick labels over a linear numeric axis",
+   "unevenly spaced x positions compressed at the upper end",
+   "directional axis end-labels drawn as paper-referenced annotations",
+   "source/credit annotation below the plot",
+   "legend suppressed"
+  ],
+  "status": "3. Needs hydration",
+  "title": "Admissions rate at elite colleges among students with the same test scores",
+  "viz_types": [
+   "Line Chart"
+  ]
+ },
+ "CHT-77B304": {
+  "caveats": [
+   "single-series vertical bar chart",
+   "ordered categorical x-axis (custom categorical ordering)",
+   "percent-formatted y-axis ticks",
+   "endpoint-only value annotations (first and last bars)",
+   "annotation-dependent directional cues below the axis",
+   "paper-referenced source footnote annotation",
+   "legend suppressed",
+   "horizontal gridlines only, baseline axis line on x"
+  ],
+  "status": "3. Needs hydration",
+  "title": "Percent of SAT test takers who scored 1300 or higher, by income group",
+  "viz_types": [
+   "Vertical Bar Chart"
+  ]
+ },
+ "CHT-ABA629": {
+  "caveats": [
+   "horizontal bar orientation",
+   "diverging layout around a zero baseline",
+   "sign-based conditional coloring",
+   "category labels rendered as annotations on the opposite side of the baseline",
+   "in-bar value labels anchored to the bar end",
+   "hidden x and y tick labels with a drawn baseline shape",
+   "row order determines vertical ordering (reversed for top-down display)",
+   "annotation-dependent directional headers"
+  ],
+  "status": "3. Needs hydration",
+  "title": "Public Opinion on Government Efficiency and DOGE",
+  "viz_types": [
+   "Diverging Bar Chart"
+  ]
+ },
+ "CHT-BC77C6": {
+  "caveats": [],
+  "status": "3. Needs hydration",
+  "title": "How the Bill Would Affect Households at Different Income Ranks",
+  "viz_types": [
+   "Vertical Bar Chart"
+  ]
+ }
+}

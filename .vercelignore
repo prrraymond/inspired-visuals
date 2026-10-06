@@ -1,0 +1,27 @@
+# Only the app and its frozen bundle are deployed. Everything else is build-time
+# tooling, unrelated workstreams, or source data -- none of which a deployment
+# may read, and all of which would bloat the function.
+#
+# Scripts/ goes entirely. Excluding it was what made the first deploy return
+# FUNCTION_INVOCATION_FAILED -- the app imported six modules from Scripts/lib --
+# but the fix is not a narrower ignore rule. build_bundle.py vendors those
+# modules into gallery/bundle/lib/, so the bundle is self-contained and this
+# rule cannot strand the app again.
+Scripts/
+
+data/
+docs/
+PRD/
+outputs/
+generated/
+test_data/
+tests/
+weekly_report/
+viz_gallery/
+backups/
+gallery/cache/
+gallery/__pycache__/
+**/__pycache__/
+notebooks/
+*.ipynb
+.env*
