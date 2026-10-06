@@ -1,0 +1,18 @@
+# Only the app and its frozen bundle are deployed. Everything else in this repo
+# is build-time tooling, unrelated workstreams, or source data -- none of which
+# a deployment may read, and all of which would bloat the function.
+Scripts/
+data/
+docs/
+PRD/
+outputs/
+generated/
+test_data/
+tests/
+weekly_report/
+viz_gallery/
+backups/
+gallery/cache/
+notebooks/
+*.ipynb
+.env*

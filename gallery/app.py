@@ -11,6 +11,7 @@ Run:  python3 gallery/app.py     (from the repo root, so .env.local resolves)
 from __future__ import annotations
 
 import io
+import functools
 import json
 import math
 import os
@@ -27,6 +28,7 @@ import requests
 from flask import (Flask, Response, abort, jsonify, redirect, render_template, request,
                    send_file, url_for)
 
+import bundle
 import catalog
 import chartgen
 import library
@@ -46,6 +48,35 @@ from template_iface import read_interface, suggest_mapping
 app = Flask(__name__)
 YOU = "you"                       # the single local operator
 
+# Serve the frozen bundle when one is present. A deployment has no Supabase
+# key and no Notion token, so every route has to be satisfiable from files in
+# the repo; locally the bundle is simply a faster, offline path.
+BUNDLED = bundle.available()
+
+# A deployed instance is reachable by people who did not build it. The limits
+# below are not a sandbox -- they bound the obvious ways a paste can cost the
+# server more than it should.
+MAX_BODY_BYTES = 2_000_000
+MAX_ROWS = 5_000
+MAX_CELLS = 50_000
+app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_BYTES
+
+
+def _local_only(view):
+    """
+    Mark a route as part of the local inspection flow.
+
+    These read Notion live and show the pipeline's own view of an entry. A
+    deployment has no Notion token and no business serving them, so they answer
+    404 there rather than failing halfway through with a credential error.
+    """
+    @functools.wraps(view)
+    def guarded(*args, **kwargs):
+        if BUNDLED:
+            abort(404)
+        return view(*args, **kwargs)
+    return guarded
+
 
 def _dev() -> bool:
     """
@@ -64,7 +95,9 @@ def _globals():
         args.pop("dev", None)
     else:
         args["dev"] = "1"
-    return {"config_problems": library.check_credentials(),
+    # A bundled deployment has no credentials by design, so it has none to
+    # complain about. Checking would report their absence as a fault.
+    return {"config_problems": [] if BUNDLED else library.check_credentials(),
             "dev": _dev(),
             "dev_href": url_for(request.endpoint, **{**(request.view_args or {}), **args})
                         if request.endpoint else "?dev=1"}
@@ -75,10 +108,15 @@ def _globals():
 # --------------------------------------------------------------------------- #
 @app.route("/")
 def index():
-    try:
-        entries, error = library.list_entries(), None
-    except Exception as exc:
-        entries, error = [], f"{type(exc).__name__}: {exc}"
+    if BUNDLED:
+        data = bundle.entries()
+        entries = [bundle.Entry(cid, data[cid]) for cid in data]
+        error = None
+    else:
+        try:
+            entries, error = library.list_entries(), None
+        except Exception as exc:
+            entries, error = [], f"{type(exc).__name__}: {exc}"
 
     rank = {cid: i for i, cid in enumerate(catalog.ORDER)}
     cards, undescribed = [], []
@@ -97,7 +135,7 @@ def index():
 
 @app.route("/preview/<chartid>.png")
 def preview_image(chartid):
-    path = previews.path(chartid)
+    path = bundle.preview(chartid) if BUNDLED else previews.path(chartid)
     if path is None:
         abort(404)
     return Response(path.read_bytes(), mimetype="image/png",
@@ -149,6 +187,11 @@ def _template_for(chartid):
     spec = catalog.entry(chartid)
     if spec is None:
         abort(404)
+    if BUNDLED:
+        src = bundle.template(chartid)
+        if src is None:
+            abort(503)
+        return spec, src
     src = previews.source(chartid)
     if src is None:
         try:
@@ -167,12 +210,33 @@ def workspace(chartid):
     state = chartgen.state(chartid, src, demo_frame(chartid))
     # The catalog row is for the collapsed details section only. A slow or absent
     # Notion must not stop someone making a chart, so its failure is silent here.
-    try:
-        entry = library.get_entry(chartid)
-    except Exception:
-        entry = None
+    if BUNDLED:
+        data = bundle.entries().get(chartid)
+        entry = bundle.Entry(chartid, data) if data else None
+    else:
+        try:
+            entry = library.get_entry(chartid)
+        except Exception:
+            entry = None
     return render_template("workspace.html", chartid=chartid, spec=spec,
                            state=state, entry=entry)
+
+
+def _too_big(columns, rows) -> str | None:
+    """
+    Refuse a table that would cost more to draw than it is worth.
+
+    Said in the same plain terms as every other refusal, because a person who
+    pastes a large export should be told what the limit is, not shown a timeout.
+    """
+    if len(rows) > MAX_ROWS:
+        return (f"That is {len(rows):,} rows. This tool draws up to {MAX_ROWS:,} — "
+                f"summarise the data first, or chart a slice of it.")
+    cells = len(rows) * max(1, len(columns))
+    if cells > MAX_CELLS:
+        return (f"That is {cells:,} cells. This tool handles up to {MAX_CELLS:,} — "
+                f"try fewer columns, or fewer rows.")
+    return None
 
 
 @app.route("/api/render/<chartid>", methods=["POST"])
@@ -186,8 +250,12 @@ def api_render(chartid):
     """
     _, src = _template_for(chartid)
     body = request.get_json(silent=True) or {}
+    columns, rows = body.get("columns") or [], body.get("rows") or []
+    too_big = _too_big(columns, rows)
+    if too_big:
+        return jsonify({"ok": False, "stage": "data", "problems": [too_big]}), 413
     try:
-        df = tabular.from_grid(body.get("columns") or [], body.get("rows") or [])
+        df = tabular.from_grid(columns, rows)
     except Exception as exc:
         return jsonify({"ok": False, "stage": "data",
                         "problems": [f"could not read the table: {exc}"]}), 400
@@ -206,6 +274,9 @@ def api_parse():
     text = (request.get_json(silent=True) or {}).get("text") or ""
     try:
         df = tabular.parse_text(text)
+        over = _too_big(list(df.columns), df.values.tolist())
+        if over:
+            return jsonify({"ok": False, "problem": over})
     except Exception as exc:
         return jsonify({"ok": False,
                         "problem": f"That didn’t read as a table: {exc}"}), 200
@@ -215,6 +286,7 @@ def api_parse():
 
 
 @app.route("/chart/<chartid>")
+@_local_only
 def detail(chartid):
     try:
         entry = library.get_entry(chartid)
@@ -266,6 +338,7 @@ def _coerce(df: pd.DataFrame) -> pd.DataFrame:
 
 
 @app.route("/chart/<chartid>/use", methods=["GET", "POST"])
+@_local_only
 def use(chartid):
     entry = library.get_entry(chartid)
     if entry is None:
@@ -289,6 +362,7 @@ def use(chartid):
 # 2. check + map
 # --------------------------------------------------------------------------- #
 @app.route("/run/<rid>/data", methods=["GET", "POST"])
+@_local_only
 def run_data(rid):
     run = runs.get(rid)
     if run is None:
@@ -366,6 +440,7 @@ def _fresh_proposals(run) -> dict:
 
 
 @app.route("/run/<rid>/parameters", methods=["GET", "POST"])
+@_local_only
 def run_parameters(rid):
     run = runs.get(rid)
     if run is None or run.get("contract") is None:
@@ -443,6 +518,7 @@ def _parameters_page(rid, errors=None):
 # 4. render + caption
 # --------------------------------------------------------------------------- #
 @app.route("/run/<rid>/render", methods=["GET", "POST"])
+@_local_only
 def run_render(rid):
     run = runs.get(rid)
     if run is None or not run.get("proposals"):
@@ -476,6 +552,7 @@ def _caption_roles(iface) -> list:
 
 
 @app.route("/run/<rid>/image.<fmt>")
+@_local_only
 def run_image(rid, fmt):
     run = runs.get(rid)
     if run is None or not run.get("result") or fmt not in run["result"]["images"]:
@@ -513,10 +590,14 @@ if __name__ == "__main__":
         for p in problems:
             print(f"  - {p}")
         raise SystemExit(1)
-    print("Loading templates and building previews...")
-    try:
-        previews.warm(library.list_entries())
-    except Exception as exc:                      # a cold library is not a crash
-        print(f"  ! could not warm previews: {type(exc).__name__}: {exc}")
+    if BUNDLED:
+        print(f"Serving the frozen bundle: {len(bundle.entries())} charts, no "
+              f"Notion or Supabase on the request path.")
+    else:
+        print("Loading templates and building previews...")
+        try:
+            previews.warm(library.list_entries())
+        except Exception as exc:                  # a cold library is not a crash
+            print(f"  ! could not warm previews: {type(exc).__name__}: {exc}")
     print("Gallery on http://127.0.0.1:5111   (local only — exec() render path)")
     app.run(host="127.0.0.1", port=5111, debug=False, threaded=True)
