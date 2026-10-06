@@ -29,4 +29,34 @@ sys.path.insert(0, os.path.join(_ROOT, "gallery"))
 sys.path.insert(0, os.path.join(_ROOT, "Scripts", "lib"))
 sys.path.insert(0, os.path.join(_ROOT, "gallery", "bundle", "lib"))
 
-from app import app  # noqa: E402,F401
+try:
+    from app import app  # noqa: E402,F401
+except Exception:
+    # A failed import here is otherwise invisible: the platform answers 500
+    # FUNCTION_INVOCATION_FAILED with no clue which module was missing, and the
+    # first two deploys were each spent guessing. Report it instead.
+    import json
+    import traceback
+
+    _TRACE = traceback.format_exc()
+    _DIAG = {
+        "error": "the application failed to import",
+        "traceback": _TRACE.splitlines(),
+        "python": sys.version,
+        "cwd": os.getcwd(),
+        "root": _ROOT,
+        "root_listing": sorted(os.listdir(_ROOT))[:40] if os.path.isdir(_ROOT) else None,
+        "gallery_listing": sorted(os.listdir(os.path.join(_ROOT, "gallery")))[:40]
+            if os.path.isdir(os.path.join(_ROOT, "gallery")) else "gallery/ is NOT present",
+        "bundle_lib": sorted(os.listdir(os.path.join(_ROOT, "gallery", "bundle", "lib")))
+            if os.path.isdir(os.path.join(_ROOT, "gallery", "bundle", "lib"))
+            else "gallery/bundle/lib/ is NOT present",
+        "sys_path": sys.path,
+    }
+    print(_TRACE)
+
+    def app(environ, start_response):                 # minimal WSGI diagnostic
+        body = json.dumps(_DIAG, indent=1).encode()
+        start_response("500 Internal Server Error",
+                       [("Content-Type", "application/json"), ("Content-Length", str(len(body)))])
+        return [body]
