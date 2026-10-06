@@ -2,9 +2,17 @@
 """
 ChartGen gallery — browse the library, and take a template through to a chart.
 
-    LOCAL ONLY. Binds to 127.0.0.1, no auth, no accounts. The render path
-    exec()s generated code with user-supplied data; see gallery/render_local.py
-    for why that is acceptable here and what has to change before it is not.
+    THE RENDER PATH exec()s TEMPLATE CODE.
+
+    Run locally it binds to 127.0.0.1 with no auth and no accounts. Deployed, it
+    serves gallery/bundle/ -- no Supabase key, no Notion token, and no network
+    call on the request path -- so the only code exec() can reach is the reviewed
+    set frozen into the bundle at build time. Rebuilding the bundle is the review
+    gate.
+
+    It is still NOT a sandbox. Before this serves data from anyone you would not
+    run locally, move build_figure into an isolated worker: separate process, no
+    network, no filesystem, hard timeout. See gallery/render_local.py.
 
 Run:  python3 gallery/app.py     (from the repo root, so .env.local resolves)
 """
@@ -18,9 +26,13 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                "Scripts", "lib"))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
+# Scripts/lib for local work; the bundle's vendored copy for a deployment, which
+# ships no Scripts/ at all. Whichever exists wins, so this module imports the
+# same way however it is entered -- directly, or as gallery.app from the root.
+sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "Scripts", "lib"))
+sys.path.insert(0, os.path.join(_HERE, "bundle", "lib"))
 
 import numpy as np
 import pandas as pd

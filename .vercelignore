@@ -21,6 +21,7 @@ viz_gallery/
 backups/
 gallery/cache/
 gallery/__pycache__/
+**/__pycache__/
 notebooks/
 *.ipynb
 .env*
