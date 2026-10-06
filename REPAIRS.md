@@ -344,6 +344,54 @@ the same kind of material the catalog was built from.
 
 ---
 
+## 2026-10-05 — deployable bundle; first deploy returned 500
+
+Deploying the gallery as it stood would have put a Supabase service-role key in
+a hosting provider's environment, made Notion a dependency of every page load,
+and executed templates fetched at runtime that nobody had read.
+`gallery/bundle/` answers all three: `Scripts/build_bundle.py` runs locally and
+freezes the reviewed templates, their pre-rendered previews, the map geometry
+and the little metadata the UI shows. The deployment reads files from the repo.
+
+**The first deploy returned `FUNCTION_INVOCATION_FAILED`.** `.vercelignore`
+excluded `Scripts/`, but the app imports six modules from `Scripts/lib` —
+`data_contract`, `input_check`, `render_guard`, `template_iface`,
+`caption_gate`, `provenance` — so the function could not import at all.
+
+The first fix was a narrower ignore rule keeping `Scripts/lib`. That was wrong:
+it left the deployment depending on whether `*` crosses `/`, which differs
+between `fnmatch` and gitignore semantics, and a simulation of the deploy
+payload showed the modules still missing. The real fix is that the bundle
+carries them — `build_bundle.py` vendors `Scripts/lib/*.py` into
+`gallery/bundle/lib/`, so `Scripts/` can be excluded wholesale and no ignore
+rule can strand the app again.
+
+Two more faults the same simulation caught before they shipped:
+
+- **The topojson route wrote to disk.** It fetched the map geometry from
+  cdn.plot.ly and cached it under `gallery/cache/`, which is excluded from the
+  deploy and read-only there anyway, so the map would have failed. The geometry
+  is frozen into the bundle; the fetch-and-cache path survives for local use and
+  tolerates a read-only filesystem instead of raising.
+- **The credentials banner would have fired on every page.** A bundled
+  deployment has no credentials by design, so it has none to report missing.
+
+Also added: the inspection flow (`/chart`, `/use`, `/run/*`) answers 404 when
+bundled rather than failing partway through on a missing token, and pastes are
+bounded at 5,000 rows and 50,000 cells, refused in the same plain language as
+every other refusal.
+
+`/tmp/claude-501/deploycheck.py` copies exactly what `.vercelignore` would ship
+into a temporary directory and exercises the app there. It is what found all
+three faults; a deploy is worth simulating before it is paid for.
+
+**Still not a sandbox.** Freezing the templates removes the unreviewed-code
+risk, which was the sharp edge, but `build_figure` still runs in-process.
+`api/index.py` carries that in a banner. Before this serves data from anyone
+the operator would not run locally, it needs an isolated worker.
+
+---
+
 ## 2026-10-04 — MVP rebuilt on six newly-selected charts
 
 The three charts the prototype was built on were replaced with six picked from

@@ -22,7 +22,11 @@ import os
 import sys
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# The bundle's vendored copy comes first: a deployment ships no Scripts/ at all,
+# and locally this keeps the app running against the same modules that were
+# frozen rather than whichever version is in the working tree.
 sys.path.insert(0, os.path.join(_ROOT, "gallery"))
 sys.path.insert(0, os.path.join(_ROOT, "Scripts", "lib"))
+sys.path.insert(0, os.path.join(_ROOT, "gallery", "bundle", "lib"))
 
 from app import app  # noqa: E402,F401

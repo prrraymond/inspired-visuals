@@ -169,17 +169,27 @@ _TOPOJSON_NAME = re.compile(r"^[a-z_]+_\d+m\.json$")
 def topojson(name):
     if not _TOPOJSON_NAME.match(name):
         abort(404)
-    TOPOJSON_DIR.mkdir(parents=True, exist_ok=True)
+    # Frozen into the bundle for a deployment: the request path must not fetch
+    # anything, and on a read-only filesystem it could not cache it anyway.
+    vendored = bundle.vendored(name)
+    if vendored is not None:
+        return send_file(vendored, mimetype="application/json", conditional=True)
+
     path = TOPOJSON_DIR / name
-    if not path.exists():
-        try:
-            r = requests.get(f"https://cdn.plot.ly/{name}", timeout=20)
-            r.raise_for_status()
-            path.write_bytes(r.content)
-            print(f"  - cached map geometry {name} ({len(r.content):,}B)")
-        except requests.RequestException as exc:
-            return jsonify({"error": f"could not fetch {name}: {exc}"}), 502
-    return send_file(path, mimetype="application/json", conditional=True)
+    if path.exists():
+        return send_file(path, mimetype="application/json", conditional=True)
+    try:
+        r = requests.get(f"https://cdn.plot.ly/{name}", timeout=20)
+        r.raise_for_status()
+    except requests.RequestException as exc:
+        return jsonify({"error": f"could not fetch {name}: {exc}"}), 502
+    try:
+        TOPOJSON_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(r.content)
+        print(f"  - cached map geometry {name} ({len(r.content):,}B)")
+    except OSError:
+        pass                      # read-only filesystem: serve it without caching
+    return Response(r.content, mimetype="application/json")
 
 
 def _template_for(chartid):

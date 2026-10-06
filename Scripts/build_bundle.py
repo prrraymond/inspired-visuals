@@ -33,10 +33,34 @@ from demo_data import demo_frame                                # noqa: E402
 OUT = _ROOT / "gallery" / "bundle"
 
 
+def vendor_lib() -> int:
+    """
+    Copy Scripts/lib into the bundle.
+
+    The app imports data_contract, render_guard, template_iface, caption_gate,
+    input_check and provenance as top-level modules. Leaving them outside the
+    bundle meant the deployment depended on an ignore rule keeping one directory
+    out of a wholesale exclusion -- and on `*` not crossing `/`, which differs
+    between implementations. Vendoring removes the question: the bundle carries
+    everything it needs, and the deployment ships no Scripts/ at all.
+    """
+    dest = OUT / "lib"
+    if dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True)
+    n = 0
+    for src in sorted((_ROOT / "Scripts" / "lib").glob("*.py")):
+        shutil.copy2(src, dest / src.name)
+        n += 1
+    print(f"vendored {n} library modules into {dest.relative_to(_ROOT)}")
+    return n
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "templates").mkdir(exist_ok=True)
     (OUT / "previews").mkdir(exist_ok=True)
+    vendor_lib()
 
     entries, failed = {}, []
     for chartid in catalog.ORDER:

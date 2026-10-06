@@ -26,6 +26,7 @@ DIR = pathlib.Path(__file__).parent / "bundle"
 TEMPLATES = DIR / "templates"
 PREVIEWS = DIR / "previews"
 ENTRIES = DIR / "entries.json"
+VENDOR = DIR / "vendor"
 
 
 def available() -> bool:
@@ -65,3 +66,9 @@ class Entry:
         self.status = data.get("status")
         self.caveats = data.get("caveats") or []
         self.viz_types = data.get("viz_types") or []
+
+
+def vendored(name: str) -> pathlib.Path | None:
+    """A static asset frozen into the bundle, such as the map geometry."""
+    path = VENDOR / name
+    return path if path.exists() else None
