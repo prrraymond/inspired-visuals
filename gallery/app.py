@@ -139,8 +139,20 @@ def index():
             # library, and a card that says so is more use than a silent omission.
             undescribed.append(e)
             continue
+        # Bundled, a preview exists if its file does. Asking previews.status()
+        # reads the build manifest under gallery/cache/, which is deliberately
+        # not shipped -- so every card reported "this template did not draw"
+        # while the PNG sat right there in the bundle.
+        if BUNDLED:
+            df = demo_frame(e.chartid)
+            preview = {"ok": bundle.preview(e.chartid) is not None,
+                       "problem": None if bundle.preview(e.chartid) else
+                                  "No preview was built for this template.",
+                       "rows": int(len(df)) if df is not None else None}
+        else:
+            preview = previews.status(e.chartid)
         cards.append({"chartid": e.chartid, "entry": e, "spec": spec,
-                      "preview": previews.status(e.chartid)})
+                      "preview": preview})
     cards.sort(key=lambda c: rank.get(c["chartid"], 99))
     return render_template("index.html", cards=cards, undescribed=undescribed, error=error)
 
