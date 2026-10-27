@@ -53,7 +53,7 @@ out = {}
 r = c.get("/")
 out["index_status"] = r.status_code
 out["index_text"] = r.get_data(as_text=True)
-for cid in ["CHT-77B304", "CHT-2AAEE9"]:
+for cid in ["CHT-77B304", "CHT-2AAEE9", "story-stocks-vs-mood", "story-nfl-home-states"]:
     out[f"ws_{cid}"] = c.get(f"/workspace/{cid}").status_code
     out[f"png_{cid}"] = len(c.get(f"/preview/{cid}.png").data)
 out["topojson"] = len(c.get("/vendor/topojson/usa_110m.json").data)
@@ -91,13 +91,14 @@ def main() -> int:
 
     checks = [
         ("index serves", got["index_status"] == 200),
-        ("six cards carry a preview image", text.count("/preview/") >= 6),
+        ("every card carries a preview image", text.count("/preview/") >= 17),
+        ("stories lead the page", 0 <= text.find("Start from a story")
+                                  < text.find("Or start from a basic shape")),
         ("no card reports a failed preview", "did not draw" not in text
                                              and "Preview unavailable" not in text),
         ("no configuration banner", "Configuration incomplete" not in text),
-        ("workspaces serve", got["ws_CHT-77B304"] == 200 and got["ws_CHT-2AAEE9"] == 200),
-        ("preview PNGs served", got["png_CHT-77B304"] > 10_000
-                                and got["png_CHT-2AAEE9"] > 10_000),
+        ("workspaces serve", all(v == 200 for k, v in got.items() if k.startswith("ws_"))),
+        ("preview PNGs served", all(v > 10_000 for k, v in got.items() if k.startswith("png_"))),
         ("map geometry served", got["topojson"] > 10_000),
         ("plotly served", got["plotly"] > 1_000_000),
         ("inspection flow closed", got["inspection_404"] == 404),

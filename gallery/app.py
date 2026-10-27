@@ -129,6 +129,9 @@ def index():
             entries, error = library.list_entries(), None
         except Exception as exc:
             entries, error = [], f"{type(exc).__name__}: {exc}"
+        # Stories have no Notion row; they are described entirely by the catalog.
+        # Listed regardless of whether Notion answered, since nothing about them needs it.
+        entries = [_story_entry(cid) for cid in catalog.STORY_ORDER] + entries
 
     rank = {cid: i for i, cid in enumerate(catalog.ORDER)}
     cards, undescribed = [], []
@@ -152,9 +155,19 @@ def index():
         else:
             preview = previews.status(e.chartid)
         cards.append({"chartid": e.chartid, "entry": e, "spec": spec,
-                      "preview": preview})
+                      "preview": preview, "credit": catalog.attribution(e.chartid)})
     cards.sort(key=lambda c: rank.get(c["chartid"], 99))
-    return render_template("index.html", cards=cards, undescribed=undescribed, error=error)
+    stories = [c for c in cards if catalog.is_story(c["chartid"])]
+    cards = [c for c in cards if not catalog.is_story(c["chartid"])]
+    return render_template("index.html", stories=stories, cards=cards,
+                           undescribed=undescribed, error=error,
+                           placeholder_credit=catalog.ATTRIBUTION_PLACEHOLDER)
+
+
+def _story_entry(chartid):
+    """The library-entry view of a story, built from the catalog alone."""
+    spec = catalog.entry(chartid)
+    return bundle.Entry(chartid, {"title": spec["name"], "viz_types": [spec["form"]]})
 
 
 @app.route("/preview/<chartid>.png")
@@ -242,18 +255,23 @@ def _template_for(chartid):
 def workspace(chartid):
     spec, src = _template_for(chartid)
     state = chartgen.state(chartid, src, demo_frame(chartid))
+    state["roles"] = chartgen.roles(chartid, src)
     # The catalog row is for the collapsed details section only. A slow or absent
     # Notion must not stop someone making a chart, so its failure is silent here.
     if BUNDLED:
         data = bundle.entries().get(chartid)
         entry = bundle.Entry(chartid, data) if data else None
+    elif catalog.is_story(chartid):
+        entry = _story_entry(chartid)
     else:
         try:
             entry = library.get_entry(chartid)
         except Exception:
             entry = None
     return render_template("workspace.html", chartid=chartid, spec=spec,
-                           state=state, entry=entry)
+                           state=state, entry=entry, credit=catalog.attribution(chartid),
+                           story=catalog.is_story(chartid),
+                           placeholder_credit=catalog.ATTRIBUTION_PLACEHOLDER)
 
 
 def _too_big(columns, rows) -> str | None:
@@ -289,25 +307,32 @@ def api_render(chartid):
     if too_big:
         return jsonify({"ok": False, "stage": "data", "problems": [too_big]}), 413
     try:
-        df = tabular.from_grid(columns, rows)
+        # By position, not by name (PRD R14): the person's headers are theirs.
+        df, binding = chartgen.bind(chartid, columns, rows, src)
     except Exception as exc:
         return jsonify({"ok": False, "stage": "data",
                         "problems": [f"could not read the table: {exc}"]}), 400
 
-    findings = chartgen.check_against_demo(chartid, df, src)
+    findings = chartgen.check_against_demo(chartid, df, src, binding)
     state = chartgen.state(chartid, src, df,
                            captions=body.get("captions") or {},
-                           settings=body.get("settings") or {})
+                           settings=body.get("settings") or {},
+                           fmt=body.get("format") or {})
+    # The grid stays as the person sent it; the bound frame is for the template.
+    state.pop("grid", None)
     state["notes"] = findings
+    state["binding"] = binding
     return jsonify(state)
 
 
 @app.route("/api/parse", methods=["POST"])
 def api_parse():
     """Turn pasted text into a grid. Parsing failures are messages, not stack traces."""
-    text = (request.get_json(silent=True) or {}).get("text") or ""
+    body = request.get_json(silent=True) or {}
+    text = body.get("text") or ""
+    header = body.get("header")
     try:
-        df = tabular.parse_text(text)
+        df, had_header = tabular.parse_table(text, header if isinstance(header, bool) else None)
         over = _too_big(list(df.columns), df.values.tolist())
         if over:
             return jsonify({"ok": False, "problem": over})
@@ -316,7 +341,7 @@ def api_parse():
                         "problem": f"That didn’t read as a table: {exc}"}), 200
     if df.empty:
         return jsonify({"ok": False, "problem": "That parsed, but there are no rows in it."})
-    return jsonify({"ok": True, "grid": tabular.to_grid(df)})
+    return jsonify({"ok": True, "grid": tabular.to_grid(df), "header": had_header})
 
 
 @app.route("/chart/<chartid>")

@@ -11,10 +11,16 @@ The demo dataset is also the reference the user's own data is checked against --
 `derive_contract(demo_df)` is what `input_check` compares a paste to. That makes
 the answer to "what does this template need?" one thing, visible on screen, rather
 than a schema written down somewhere else and hoped to still be true.
+
+A story (see catalog.STORIES) opens with real data instead: a frozen snapshot, read
+from stories/data/. Its structure is still the contract, exactly as here.
 """
 from __future__ import annotations
 
 import pandas as pd
+
+import catalog
+import tabular
 
 # --------------------------------------------------------------------------- #
 # Shared: U.S. state geography, for any map template.
@@ -142,7 +148,23 @@ BUILDERS = {
 }
 
 
+def _story(chartid: str) -> pd.DataFrame | None:
+    """
+    A story's data: the snapshot Scripts/export_story_data.py wrote from the warehouse.
+
+    Read as text and typed the same way a paste is, so the reference a person's own
+    table is checked against was typed by the same rules theirs will be.
+    """
+    path = catalog.story_data_path(chartid)
+    if path is None or not path.exists():
+        return None
+    return tabular.coerce(pd.read_csv(path, dtype=str, keep_default_na=False)
+                          .replace("", None))
+
+
 def demo_frame(chartid: str) -> pd.DataFrame | None:
     """A fresh copy every call -- callers edit what they get back."""
+    if catalog.is_story(chartid):
+        return _story(chartid)
     build = BUILDERS.get(chartid)
     return build() if build else None

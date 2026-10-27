@@ -2,6 +2,9 @@
 """
 Freeze the catalogued templates, their previews and their metadata into the repo.
 
+Stories (catalog.STORIES) are frozen the same way, from stories/templates/ rather
+than storage; their data is already in the repo under gallery/stories/data/.
+
     python3 Scripts/build_bundle.py
 
 Run this locally, where Notion, Supabase and kaleido are all available. It writes
@@ -56,6 +59,34 @@ def vendor_lib() -> int:
     return n
 
 
+def freeze(chartid: str, src: str | None, failed: list) -> bool:
+    """Gate, write and render one template into the bundle. False if it must not ship."""
+    if not src:
+        print("  ! no template source")
+        failed.append(chartid)
+        return False
+    try:
+        check_captions(src)
+    except CaptionViolation as exc:
+        # A template that names a subject must not ship. This is the last
+        # gate before it becomes a release artefact.
+        print(f"  ! REFUSED, template carries a caption: {str(exc).splitlines()[0]}")
+        failed.append(chartid)
+        return False
+    (OUT / "templates" / f"{chartid}.py").write_text(src)
+    print(f"  template {len(src)}B")
+
+    try:
+        result = chartgen.build(chartid, src, demo_frame(chartid), formats=("png",))
+    except Exception as exc:
+        print(f"  ! will not render: {type(exc).__name__}: {exc}")
+        failed.append(chartid)
+        return False
+    (OUT / "previews" / f"{chartid}.png").write_bytes(result["images"]["png"])
+    print(f"  preview {len(result['images']['png']):,}B")
+    return True
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "templates").mkdir(exist_ok=True)
@@ -65,6 +96,15 @@ def main() -> int:
     entries, failed = {}, []
     for chartid in catalog.ORDER:
         print(f"\n{chartid}")
+        if catalog.is_story(chartid):
+            # A story is described by the catalog and its template lives in the repo;
+            # there is no Notion row to read.
+            spec = catalog.entry(chartid)
+            ok = freeze(chartid, catalog.story_template(chartid), failed)
+            if ok:
+                entries[chartid] = {"title": spec["name"], "status": None,
+                                    "caveats": [], "viz_types": [spec["form"]]}
+            continue
         try:
             live = library.get_entry(chartid)
         except Exception as exc:
@@ -77,29 +117,8 @@ def main() -> int:
             continue
 
         src = previews.template_source(chartid, live.template_url)
-        if not src:
-            print("  ! no template source")
-            failed.append(chartid)
+        if not freeze(chartid, src, failed):
             continue
-        try:
-            check_captions(src)
-        except CaptionViolation as exc:
-            # A template that names a subject must not ship. This is the last
-            # gate before it becomes a release artefact.
-            print(f"  ! REFUSED, template carries a caption: {str(exc).splitlines()[0]}")
-            failed.append(chartid)
-            continue
-        (OUT / "templates" / f"{chartid}.py").write_text(src)
-        print(f"  template {len(src)}B")
-
-        try:
-            result = chartgen.build(chartid, src, demo_frame(chartid), formats=("png",))
-        except Exception as exc:
-            print(f"  ! will not render: {type(exc).__name__}: {exc}")
-            failed.append(chartid)
-            continue
-        (OUT / "previews" / f"{chartid}.png").write_bytes(result["images"]["png"])
-        print(f"  preview {len(result['images']['png']):,}B")
 
         entries[chartid] = {
             "title": live.title,

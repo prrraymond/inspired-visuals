@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
                                 "Scripts", "lib"))
 
 import catalog
+import chart_format
 from data_contract import derive_contract
 from demo_data import demo_frame
 from input_check import check_input
@@ -105,7 +106,7 @@ def _derived(contract: dict, df: pd.DataFrame, column: str) -> dict:
 
 def build(chartid: str, template_src: str, df: pd.DataFrame, *,
           captions: dict | None = None, settings: dict | None = None,
-          formats: tuple = ()) -> dict:
+          formats: tuple = (), fmt: dict | None = None) -> dict:
     """
     Draw `df` with the stored template. Returns render_local's result dict plus
     the contract and the settled proposals, so a caller can show both.
@@ -129,7 +130,10 @@ def build(chartid: str, template_src: str, df: pd.DataFrame, *,
     # Constants the catalog pins for this chart: values a template exposes that
     # are neither data nor user-editable, such as the labels on a reference line.
     # Applied first, so an actual control still wins.
-    constants = {**(spec.get("constants") or {}), **constants}
+    # Colour choices (PRD R13) sit between the two: they beat the template's
+    # default but never a control that targets the same constant.
+    colors = chart_format.color_constants(spec, read_interface(template_src)["constants"], fmt)
+    constants = {**(spec.get("constants") or {}), **colors, **constants}
     result = _render(template_src, df, contract, mapping, proposals,
                      {**(spec.get("captions") or {}), **(captions or {})},
                      formats=formats, constants=constants,
@@ -276,7 +280,7 @@ def settings_spec(chartid: str, template_src: str, proposals: dict) -> list[dict
 
 
 def state(chartid: str, template_src: str, df, *, captions: dict | None = None,
-          settings: dict | None = None) -> dict:
+          settings: dict | None = None, fmt: dict | None = None) -> dict:
     """
     Everything one workspace render produces: the figure, the table behind it, the
     text slots the template can actually take, and the settings that were applied.
@@ -293,7 +297,8 @@ def state(chartid: str, template_src: str, df, *, captions: dict | None = None,
         "caption_slots": [], "settings": [], "controls": [], "log": [],
     }
     try:
-        result = build(chartid, template_src, df, captions=captions, settings=settings)
+        result = build(chartid, template_src, df, captions=captions, settings=settings,
+                       fmt=fmt)
     except RenderRefused as exc:
         out["problems"] = list(exc.problems)
         out["stage"] = exc.stage
@@ -320,8 +325,18 @@ def state(chartid: str, template_src: str, df, *, captions: dict | None = None,
         out["stage"] = "unexpected"
         return out
 
+    figure = json.loads(result["figure"].to_json())
+    # Defaults are read before the person's choices are applied: they are what
+    # "Reset" returns to, so they have to be the template's look, not theirs.
+    base = chart_format.defaults(figure)
+    result["log"].extend(f"format: {line}" for line in chart_format.apply(figure, fmt, base))
+    out["format"] = {
+        "defaults": base,
+        "colors": chart_format.color_roles(spec, read_interface(template_src)["constants"]),
+        "fonts": [name for name, _ in chart_format.FONTS],
+    }
     out.update(ok=True, log=result["log"],
-               figure=json.loads(result["figure"].to_json()),
+               figure=figure,
                caption_slots=sorted(result.get("caption_slots") or []),
                controls=result.get("controls") or [],
                settings=settings_spec(chartid, template_src, result["proposals"]))
@@ -337,22 +352,22 @@ def state(chartid: str, template_src: str, df, *, captions: dict | None = None,
 # sentence about their spreadsheet, keeping the original available for the
 # developer view rather than throwing it away.
 _PLAIN = {
-    "missing": lambda f, c: (f"This chart needs a column called “{c}”. "
-                             f"Your data doesn’t have one."),
-    "name_mismatch": lambda f, c: f"Your column is named differently — it should be “{c}”.",
-    "ambiguous": lambda f, c: f"More than one of your columns could be “{c}”. Rename the one you mean.",
-    "not_numeric": lambda f, c: f"“{c}” has to hold numbers, but some of its values are text.",
-    "all_null": lambda f, c: f"“{c}” is empty in every row.",
+    "missing": lambda f, c: (f"This chart needs {c}. Your data doesn’t have that "
+                             f"many columns."),
+    "not_numeric": lambda f, c: f"{c} has to hold numbers, but some of its values are text.",
+    "all_null": lambda f, c: f"{c} is empty in every row.",
     "nulls": lambda f, c: None,          # kept, but stated by the checker well enough
     "extra": lambda f, c: None,
     "empty": lambda f, c: "There are no rows to draw.",
 }
 
+# Columns are bound by position (PRD R14), so every fix is about order: put the
+# column where the chart expects it. Nothing here asks anyone to rename anything.
+_ORDER_HINT = "Check the order of your columns against “What this chart needs”."
 _HINT = {
-    "missing": "Rename one of your columns, or add it.",
-    "name_mismatch": "One click fixes this.",
-    "not_numeric": "Remove the text values, or the symbols around the numbers.",
-    "all_null": "Fill it in, or use a different column.",
+    "missing": "Add it, in that position.",
+    "not_numeric": "Remove the text values or the symbols around the numbers. " + _ORDER_HINT,
+    "all_null": "Fill it in. " + _ORDER_HINT,
 }
 
 
@@ -371,7 +386,60 @@ def optional_columns(chartid: str, template_src: str) -> set:
             if p.optional and p.var in mapping}
 
 
-def check_against_demo(chartid: str, df, template_src: str | None = None) -> list[dict]:
+def roles(chartid: str, template_src: str | None = None) -> list[dict]:
+    """
+    The columns this chart takes, in the order it takes them (PRD R14).
+
+    The demo dataset's column order is the contract: the first column a person
+    supplies fills the first role, whatever either is called.
+    """
+    demo = demo_frame(chartid)
+    if demo is None:
+        return []
+    optional = optional_columns(chartid, template_src) if template_src else set()
+    return [{"position": i + 1, "role": str(c), "label": str(c).replace("_", " "),
+             "kind": tabular.kind_of(demo[c]), "optional": c in optional}
+            for i, c in enumerate(demo.columns)]
+
+
+def bind(chartid: str, columns: list, rows: list,
+         template_src: str | None = None) -> tuple[pd.DataFrame, dict]:
+    """
+    Bind a person's table to the template's roles by position, not by name.
+
+    Returns the frame under the template's own column names -- which is what the
+    template and the checks read -- and the binding itself, stated in the
+    person's names so the page can say exactly what was used for what.
+    """
+    rs = roles(chartid, template_src)
+    if not rs:
+        return tabular.from_grid(columns, rows), {"roles": [], "ignored": []}
+    n = len(rs)
+    names = [str(c) for c in columns]
+    kept = [list(r[:n]) for r in rows]
+    width = min(n, len(names))
+    df = tabular.from_grid([r["role"] for r in rs[:width]],
+                           [r[:width] + [None] * (width - len(r[:width])) for r in kept])
+    binding = {
+        "roles": [{**r, "column": names[i] if i < len(names) else None}
+                  for i, r in enumerate(rs)],
+        "ignored": [{"position": i + 1, "column": c} for i, c in enumerate(names) if i >= n],
+    }
+    return df, binding
+
+
+def _say_column(binding: dict | None, role: str) -> str:
+    """A role, in the person's terms: its position and their name for it."""
+    for r in (binding or {}).get("roles") or []:
+        if r["role"] == role:
+            if r.get("column") is None:
+                return f"a column {r['position']} ({r['label']}, a {r['kind']})"
+            return f"Column {r['position']}, “{r['column']}”,"
+    return f"“{role}”"
+
+
+def check_against_demo(chartid: str, df, template_src: str | None = None,
+                       binding: dict | None = None) -> list[dict]:
     """
     Compare a person's data against the demo dataset for this template.
 
@@ -392,13 +460,15 @@ def check_against_demo(chartid: str, df, template_src: str | None = None) -> lis
         if f.column in optional:
             # Optional means optional. An absent one is information, and a broken
             # one is worth saying but never a reason to refuse the chart.
-            level = "info" if f.code == "missing" else "warning"
+            # The binding notice already lists an absent optional column.
             if f.code == "missing":
-                message = (f"“{f.column}” isn’t there. It’s optional — this chart "
-                           f"will draw without it.")
-                hint = None
+                continue
+            level = "warning"
         if message is None:
-            message = _PLAIN.get(f.code, lambda *_: None)(f, f.column)
+            said = _say_column(binding, f.column)
+            if f.code == "all_null":
+                said = said.rstrip(",")
+            message = _PLAIN.get(f.code, lambda *_: None)(f, said)
         out.append({
             "level": level,
             "code": f.code,
@@ -406,7 +476,6 @@ def check_against_demo(chartid: str, df, template_src: str | None = None) -> lis
             "message": message or f.message,
             "detail": f.message if message else None,
             "hint": hint,
-            "fix": f.fix,
         })
     rank = {"error": 0, "warning": 1, "info": 2}
     return sorted(out, key=lambda n: rank.get(n["level"], 3))

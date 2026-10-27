@@ -81,6 +81,9 @@ def template_source(chartid: str, url: str | None, *, refresh: bool = True) -> s
     keeps re-learning, so a fetch that fails says so in the log rather than quietly
     handing back yesterday's file.
     """
+    story = catalog.story_template(chartid)
+    if story is not None:
+        return story                      # a story's template lives in the repo
     _ensure_dirs()
     path = TEMPLATES / f"{chartid}.py"
     if refresh and url:
@@ -151,18 +154,18 @@ _SOURCES: dict[str, str] = {}
 
 
 def warm(entries: list) -> dict:
-    """Build every catalogued preview. Called once at startup."""
-    for e in entries:
-        if not catalog.has(e.chartid):
-            continue
-        src = template_source(e.chartid, e.template_url)
+    """Build every catalogued preview -- the library's and the stories'. Called once at startup."""
+    todo = [(e.chartid, e.template_url) for e in entries if catalog.has(e.chartid)]
+    todo = [(cid, None) for cid in catalog.STORY_ORDER] + todo
+    for chartid, url in todo:
+        src = template_source(chartid, url)
         if src is None:
-            _STATE[e.chartid] = {"ok": False, "problem": "template source unavailable"}
+            _STATE[chartid] = {"ok": False, "problem": "template source unavailable"}
             continue
-        _SOURCES[e.chartid] = src
-        _STATE[e.chartid] = build(e.chartid, src)
-        state = "ok" if _STATE[e.chartid]["ok"] else _STATE[e.chartid]["problem"]
-        print(f"  - {e.chartid}: preview {state}")
+        _SOURCES[chartid] = src
+        _STATE[chartid] = build(chartid, src)
+        state = "ok" if _STATE[chartid]["ok"] else _STATE[chartid]["problem"]
+        print(f"  - {chartid}: preview {state}")
     return _STATE
 
 
@@ -175,6 +178,9 @@ def source(chartid: str) -> str | None:
     """The template source warm() loaded, without a second trip to storage."""
     if chartid in _SOURCES:
         return _SOURCES[chartid]
+    story = catalog.story_template(chartid)
+    if story is not None:
+        return story
     p = TEMPLATES / f"{chartid}.py"
     return p.read_text() if p.exists() else None
 

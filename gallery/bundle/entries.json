@@ -93,5 +93,93 @@
   "viz_types": [
    "Vertical Bar Chart"
   ]
+ },
+ "story-311-boroughs": {
+  "caveats": [],
+  "status": null,
+  "title": "NYC 311 requests, borough by borough",
+  "viz_types": [
+   "Small multiples"
+  ]
+ },
+ "story-311-share": {
+  "caveats": [],
+  "status": null,
+  "title": "Each borough's share of 311",
+  "viz_types": [
+   "Stacked area, shares of 100"
+  ]
+ },
+ "story-311-week": {
+  "caveats": [],
+  "status": null,
+  "title": "One week of 311, by borough",
+  "viz_types": [
+   "Bar chart with values"
+  ]
+ },
+ "story-education-states": {
+  "caveats": [],
+  "status": null,
+  "title": "How much school adults have finished",
+  "viz_types": [
+   "Stacked bars, shares of 100"
+  ]
+ },
+ "story-nfl-home-states": {
+  "caveats": [],
+  "status": null,
+  "title": "Where NFL players grew up",
+  "viz_types": [
+   "Shaded state map"
+  ]
+ },
+ "story-owner-renter": {
+  "caveats": [],
+  "status": null,
+  "title": "Owners and renters, by education",
+  "viz_types": [
+   "Stacked bars with a share on top"
+  ]
+ },
+ "story-sp500-year": {
+  "caveats": [],
+  "status": null,
+  "title": "The S&P 500's year",
+  "viz_types": [
+   "Line with a headline change"
+  ]
+ },
+ "story-stock-ownership": {
+  "caveats": [],
+  "status": null,
+  "title": "Who owns stock, by income",
+  "viz_types": [
+   "Stacked area, shares of 100"
+  ]
+ },
+ "story-stocks-vs-mood": {
+  "caveats": [],
+  "status": null,
+  "title": "Stocks soared. The public's mood didn't.",
+  "viz_types": [
+   "Indexed lines on a split axis"
+  ]
+ },
+ "story-subway-boroughs": {
+  "caveats": [],
+  "status": null,
+  "title": "Subway entries, borough by borough",
+  "viz_types": [
+   "Small multiples, each on its own scale"
+  ]
+ },
+ "story-subway-recovery": {
+  "caveats": [],
+  "status": null,
+  "title": "The subway's long climb back",
+  "viz_types": [
+   "Line with a headline change"
+  ]
  }
 }
