@@ -25,13 +25,20 @@ def shippable() -> list[str]:
              if l.strip() and not l.startswith("#")]
 
     def ignored(rel: str) -> bool:
+        # gitignore semantics, which is what Vercel applies: a pattern with no
+        # slash before its end matches at ANY depth, so `data/` also strips
+        # gallery/stories/data/. Matching it only at the root is how a deploy
+        # once shipped every story without its data while this check passed.
+        parts = pathlib.PurePosixPath(rel).parts
         for r in rules:
-            d = r.rstrip("/")
-            if r.endswith("/") and (rel == d or rel.startswith(d + "/")):
-                return True
-            if fnmatch.fnmatch(rel, d) or fnmatch.fnmatch(pathlib.Path(rel).name, d):
-                return True
-            if rel.startswith(d + "/"):
+            anchored = r.startswith("/") or "/" in r.strip("/")
+            d = r.strip("/")
+            if anchored:
+                if rel == d or rel.startswith(d + "/") or fnmatch.fnmatch(rel, d):
+                    return True
+                continue
+            # unanchored: any path component (a directory or the file) may match
+            if any(fnmatch.fnmatch(part, d) for part in parts):
                 return True
         return False
 
@@ -63,6 +70,9 @@ rr = c.post("/api/render/CHT-2AAEE9", json={"columns": ["state_code", "category"
      "rows": [["CA", "Above threshold"], ["TX", "Below threshold"]],
      "captions": {}, "settings": {}})
 out["render_ok"] = rr.get_json()["ok"]
+rs = c.post("/api/render/story-311-week", json={"columns": ["borough", "requests"],
+     "rows": [["Bronx", 3], ["Queens", 5]], "captions": {}, "settings": {}})
+out["story_render_ok"] = rs.get_json()["ok"]
 print("@@" + json.dumps(out))
 '''
 
@@ -103,6 +113,7 @@ def main() -> int:
         ("plotly served", got["plotly"] > 1_000_000),
         ("inspection flow closed", got["inspection_404"] == 404),
         ("map renders", got["render_ok"] is True),
+        ("a story renders with its data", got["story_render_ok"] is True),
     ]
     bad = [name for name, ok in checks if not ok]
     for name, ok in checks:
