@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Use {{ entry.title }} — ChartGen{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('detail', chartid=entry.chartid) }}">← {{ entry.title }}</a>
+
+<section class="intro">
+  <h1>Supply your data</h1>
+  <p class="lede">This template was validated against a dataset of
+    {{ contract.row_count if contract else '—' }} rows. Yours does not have to match it exactly —
+    what it must do is carry the columns the template reads.</p>
+</section>
+
+{% if error %}<div class="banner bad"><strong>{{ error }}</strong></div>{% endif %}
+
+<div class="cols">
+<div class="col-main">
+  <form method="post" enctype="multipart/form-data" class="panel">
+    <h2>Paste rows</h2>
+    <p class="hint">CSV or tab-separated, with a header row.</p>
+    <textarea name="pasted" rows="12" class="paste" spellcheck="false"
+      placeholder="state_code,value&#10;AK,18.17&#10;AL,17.48&#10;AR,12.52"></textarea>
+
+    <div class="or"><span>or</span></div>
+
+    <h2>Upload a CSV</h2>
+    <input type="file" name="file" accept=".csv,text/csv" class="file">
+
+    <div style="margin-top:18px">
+      <button class="cta" type="submit">Check it against the template</button>
+    </div>
+  </form>
+</div>
+
+<aside class="col-side">
+  <section class="panel side">
+    <h3>What this template reads</h3>
+    {% if contract %}
+      {% for c in contract.columns %}
+      <div class="colcard" style="margin-bottom:7px">
+        <div class="colcard-h">
+          <span class="cname">{{ c.name }}</span>
+          <span class="ckind">{{ c.kind }}</span>
+        </div>
+        <p class="csum" style="margin:0">{{ c.summary }}</p>
+      </div>
+      {% endfor %}
+      <p class="hint" style="margin:10px 0 0">Names are a starting point, not a requirement —
+        a case difference is repaired, and you map columns onto the template in the next step.</p>
+    {% else %}
+      <p class="none">No contract recorded for this entry, so there is nothing to check against.</p>
+    {% endif %}
+  </section>
+</aside>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+[project]
+name = "plotshift"
+version = "0.1.0"
+description = "Pick a chart shape, put your data in it."
+requires-python = ">=3.11"
+# Runtime only. kaleido, the Notion and Supabase clients and the Anthropic SDK
+# are build-time tools: a deployment serves gallery/bundle/ and never calls them.
+dependencies = [
+    "Flask==3.0.3",
+    "pandas==2.1.4",
+    "plotly==6.0.1",
+    "numpy==1.26.4",
+    "requests==2.32.3",
+    "python-dotenv==1.0.1",
+]
+
+[tool.vercel]
+# gallery/app.py is the Flask app itself. The previous entry point wrapped it in
+# a try/except to report import failures, which the CLI's static analysis could
+# not see through.
+entrypoint = "gallery.app:app"

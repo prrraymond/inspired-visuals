@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Parameters — ChartGen{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('run_data', rid=run.id) }}">← Data and mapping</a>
+
+<section class="intro">
+  <h1>{{ cards | length }} parameter{{ '' if cards|length == 1 else 's' }} to settle</h1>
+  <p class="lede">Derived from your data, not from the template. Each one is proposed with the
+    reasoning that produced it — move a boundary and the reasoning stays, so you can see what
+    you departed from.</p>
+</section>
+
+{% for e in errors %}<div class="banner bad">{{ e }}</div>{% endfor %}
+
+<form method="post">
+{% for c in cards %}
+  {% set p = c.view %}
+  <section class="panel param" data-param="{{ c.name }}"
+    data-values="{{ c.points | tojson }}"
+    data-domain="{{ c.domain | tojson }}"
+    data-proposed="{{ c.proposed_edges | tojson }}">
+
+    <div class="param-h">
+      <span class="mono pcol">{{ c.name }}</span>
+      <span class="rstate {{ p.review or p.status }}" data-role="statechip">{{ p.review_label }}</span>
+      {% if not p.reliable %}<span class="pill bad">unreliable</span>{% endif %}
+      {% if c.is_derive_source %}<span class="pill">the colour bins come from this</span>{% endif %}
+    </div>
+
+    <div class="strip" data-role="strip">
+      <div class="strip-regions" data-role="regions"></div>
+      <div class="strip-ghosts" data-role="ghosts"></div>
+      <div class="strip-dots"    data-role="dots"></div>
+      <div class="strip-axis"></div>
+      <div class="strip-ticks"   data-role="ticks"></div>
+      <div class="strip-handles" data-role="handles"></div>
+    </div>
+
+    <div class="bins" data-role="bins"></div>
+
+    {% if p.warnings %}
+      <ul class="warnlist">{% for w in p.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    <div class="why-block">
+      <p class="whyhead" data-role="whyhead">Why these values</p>
+      <ol class="reasoning" data-role="reasons">
+        {% for r in p.reasoning %}<li>{{ r }}</li>{% endfor %}
+      </ol>
+      <p class="pcaveat">{{ p.caveat }}</p>
+    </div>
+
+    <input type="hidden" name="edges__{{ c.name }}" data-role="edges"
+           value="{{ c.proposed_edges | join(',') }}">
+    <input type="hidden" name="action__{{ c.name }}" data-role="action"
+           value="{{ 'override' if not p.reliable else 'confirm' }}">
+
+    <div class="param-actions">
+      {% if p.reliable %}
+        <button type="button" class="chip on" data-act="confirm">Confirm these values</button>
+        <button type="button" class="chip" data-act="author" data-role="authorchip" hidden>Use my values</button>
+      {% else %}
+        <span class="refuse-inline">Automation cannot select this. A person may, with a reason.</span>
+        <input type="text" name="reason__{{ c.name }}" class="reasonin"
+               placeholder="Why these values are right anyway…">
+      {% endif %}
+      <button type="button" class="chip" data-act="dismiss">Not a measure — dismiss</button>
+      <button type="button" class="chip quiet" data-role="resetchip" hidden>Back to proposal</button>
+    </div>
+    <input type="text" name="reason__{{ c.name }}__dismiss" hidden>
+  </section>
+{% endfor %}
+
+  <div class="panel" style="display:flex; align-items:center; gap:12px">
+    <button class="cta" type="submit">Render the chart</button>
+    <span class="hint">Nothing is written anywhere — this run lives in memory until you close it.</span>
+  </div>
+</form>
+
+<script src="{{ url_for('static', filename='strip.js') }}"></script>
+{% endblock %}

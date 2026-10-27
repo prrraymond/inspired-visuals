@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Your chart — ChartGen{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('run_parameters', rid=run.id) }}">← Parameters</a>
+
+{% if refused %}
+  <section class="intro"><h1>Not drawn</h1>
+    <p class="lede">The chart was refused at the <strong>{{ refused.stage }}</strong> stage rather
+      than drawn wrong.</p></section>
+  <div class="panel">
+    <ul class="findings">
+      {% for p in refused.problems %}<li class="f-error"><span class="f-tag">error</span>
+        <span class="f-msg">{{ p }}</span></li>{% endfor %}
+    </ul>
+  </div>
+{% else %}
+
+<section class="intro">
+  <h1>{{ captions.title or 'Your chart' }}</h1>
+  <p class="lede">{{ run.df | length }} rows, drawn with the parameters you settled.</p>
+</section>
+
+<div class="cols">
+<div class="col-main">
+  <figure class="shot tall" style="border:1px solid #e3e6ea; border-radius:10px">
+    <img src="{{ url_for('run_image', rid=run.id, fmt='png') }}" alt="Rendered chart">
+    <figcaption>
+      PNG · <a href="{{ url_for('run_image', rid=run.id, fmt='png') }}" target="_blank">open</a>
+      {% if 'svg' in result.images %} · SVG ·
+        <a href="{{ url_for('run_image', rid=run.id, fmt='svg') }}" target="_blank">open</a>{% endif %}
+    </figcaption>
+  </figure>
+
+  <section class="panel">
+    <h2>Say what it means</h2>
+    <p class="hint">The template ships placeholders and nothing else. These words are yours —
+      they are passed in when the chart is drawn and never written back into the template.</p>
+    <form method="post" class="captions">
+      {% set labels = {'title':'Title','subtitle':'Units or measure','units':'Axis / unit caption',
+                       'source':'Source or credit','above':'Label above the baseline',
+                       'below':'Label below the baseline'} %}
+      {% set holders = {'title':'Chart title','subtitle':'Units / measure description',
+                        'units':'Axis label','source':'Source / credit',
+                        'above':'Above baseline','below':'Below baseline'} %}
+      {% for role in caption_roles %}
+      <label class="caprow">
+        <span class="capname">{{ labels.get(role, role) }}</span>
+        <input type="text" name="{{ role }}" value="{{ captions.get(role, '') }}"
+               placeholder="{{ holders.get(role, '') }}">
+      </label>
+      {% endfor %}
+      <div style="margin-top:14px">
+        <button class="cta" type="submit">Redraw with these words</button>
+        <span class="hint" style="margin-left:10px">Leave a field empty and the placeholder stays.</span>
+      </div>
+    </form>
+  </section>
+</div>
+
+<aside class="col-side">
+  <section class="panel side">
+    <h3>What happened</h3>
+    <ol class="runlog">
+      {% for line in result.log %}<li>{{ line }}</li>{% endfor %}
+    </ol>
+  </section>
+  <section class="panel side">
+    <h3>Parameters used</h3>
+    {% for name, p in run.proposals.items() %}
+      {% if p.status == 'selected' %}
+      <div class="usedparam">
+        <span class="mono">{{ name }}</span>
+        <span class="rstate {{ p.review }}">{{ p.review }}</span>
+        <p class="mono tiny">edges {{ p.edges | select('lt', 1e300) | list | join(' · ') }}
+          {% if p.baseline is not none %}· baseline {{ p.baseline }}{% endif %}</p>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </section>
+</aside>
+</div>
+{% endif %}
+{% endblock %}
